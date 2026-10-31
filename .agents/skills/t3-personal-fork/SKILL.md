@@ -41,5 +41,6 @@ worktree. Work only there; the development checkout may contain unfinished work.
 
 If a check fails or intent is uncertain, leave a failing candidate for inspection:
 write `.personal-sync-blocked` with the reason and summarize it in the final
-report. The launcher's clean-tree gate prevents publication even if the agent
-process exits successfully. Never commit that blocker file to bypass the gate.
+report. The launcher checks for this file before publishing, even if the agent
+process exits successfully. Keep it out of commits; remove it after the blocker
+is resolved and its checks pass.

@@ -31,6 +31,7 @@ class PersonalSyncTest(unittest.TestCase):
         self.upstream_base = self.git(self.repo, "rev-parse", "HEAD").strip()
         self.git(self.repo, "remote", "add", "origin", "https://github.com/ralfboltshauser/t3code.git")
         self.git(self.repo, "remote", "add", "upstream", "https://github.com/pingdotgg/t3code.git")
+        self.git(self.repo, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
         for name, path in (("origin", self.origin), ("upstream", self.upstream)):
             url = self.git(self.repo, "config", "--get", f"remote.{name}.url").strip()
             self.git(self.repo, "config", f"url.{path}.insteadOf", url)
@@ -101,8 +102,8 @@ if [[ $1 == run && ${TEST_CHECK_FAIL:-0} == 1 ]]; then exit 1; fi
         (self.repo / "feature.txt").write_text("unfinished local work\n")
         result = self.sync()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.git(self.repo, "merge-base", "--is-ancestor", self.target, "origin/personal")
-        self.git(self.repo, "merge-base", "--is-ancestor", self.base, "origin/personal")
+        self.git(self.repo, "merge-base", "--is-ancestor", self.target, self.personal())
+        self.git(self.repo, "merge-base", "--is-ancestor", self.base, self.personal())
         custom = self.git(self.root, "--git-dir", str(self.origin), "show", "personal:custom.txt")
         self.assertEqual(custom, "intentional customization\n")
         self.assertEqual(self.git(self.repo, "rev-parse", "HEAD").strip(), self.base)
