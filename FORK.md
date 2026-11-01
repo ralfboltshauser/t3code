@@ -15,12 +15,24 @@ upstream update. Keep product changes focused and upstream connection points sma
 
 ## Intentional differences
 
-Currently there are no personal product changes. The only fork additions are this
-guide, the local maintenance skill, and `scripts/personal-sync.sh`.
+Side chats inherit their parent's permission mode when created, including their
+first turn, so starting a side conversation preserves the access already chosen
+for that work. The side chat's mode can then be changed independently. Keep this
+behavior in `ThreadForkService.ts`, `ProviderTurnStartService.ts`, and the web
+`useSideChat.ts` hook; do not restore the upstream supervised overrides.
 
-When adding a feature, replace this paragraph with its intended behavior, why it
-differs from upstream, owning paths, and a focused test command or manual check.
-Record intentional removals too, so an update cannot silently restore them.
+Verify with:
+
+```sh
+vp test run apps/server/src/orchestration-v2/ThreadFork.execution.test.ts apps/server/src/orchestration-v2/ProviderTurnStartService.test.ts -t 'side chat'
+```
+
+The other fork additions are this guide, the local maintenance skill, and
+`scripts/personal-sync.sh`.
+
+Record each customization here with its intended behavior, owning paths, and a
+focused verification command. Record intentional removals too, so an update
+cannot silently restore them.
 
 ## Daily updates
 

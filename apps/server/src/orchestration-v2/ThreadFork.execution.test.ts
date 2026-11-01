@@ -9,6 +9,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderThreadId,
+  type RuntimeMode,
   ProviderTurnId,
   RunAttemptId,
   RunId,
@@ -815,7 +816,7 @@ const writeImportedHistory = (threadId: ThreadId, text: string) =>
     });
   });
 
-const createParent = (threadId: ThreadId) =>
+const createParent = (threadId: ThreadId, runtimeMode: RuntimeMode = "full-access") =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     yield* orchestrator.dispatch({
@@ -825,7 +826,7 @@ const createParent = (threadId: ThreadId) =>
       projectId: ProjectId.make("side-chat-project"),
       title: "Side chat parent",
       modelSelection: forkCases[0]!.modelSelection,
-      runtimeMode: "full-access",
+      runtimeMode,
       interactionMode: "default",
       branch: null,
       worktreePath: null,
@@ -865,33 +866,37 @@ const askSideChat = (threadId: ThreadId, commandId: string) =>
     });
   });
 
-it.effect("a side chat of an idle parent still starts with the framing note", () =>
-  Effect.gen(function* () {
-    const orchestrator = yield* Orchestrator.OrchestratorV2;
-    const parentId = ThreadId.make("side-chat-idle-parent");
-    const sideChatId = ThreadId.make("side-chat-idle-child");
-    yield* createParent(parentId);
-    yield* writeParentRun({
-      threadId: parentId,
-      runId: RunId.make("side-chat-idle-parent-run"),
-      ordinal: 1,
-      status: "completed",
-      text: "Parent work",
-      stable: true,
-    });
+it.effect.each(["full-access", "approval-required"] as const)(
+  "a side chat of an idle parent inherits %s and starts with the framing note",
+  (runtimeMode) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const parentId = ThreadId.make("side-chat-idle-parent");
+      const sideChatId = ThreadId.make("side-chat-idle-child");
+      yield* createParent(parentId, runtimeMode);
+      yield* writeParentRun({
+        threadId: parentId,
+        runId: RunId.make("side-chat-idle-parent-run"),
+        ordinal: 1,
+        status: "completed",
+        text: "Parent work",
+        stable: true,
+      });
 
-    yield* forkSideChat("side-chat-idle-fork", parentId, sideChatId);
-    yield* askSideChat(sideChatId, "side-chat-idle-first-message");
+      yield* forkSideChat("side-chat-idle-fork", parentId, sideChatId);
+      const created = yield* orchestrator.getThreadProjection(sideChatId);
+      assert.equal(created.thread.runtimeMode, runtimeMode);
+      yield* askSideChat(sideChatId, "side-chat-idle-first-message");
 
-    const started = yield* orchestrator.getThreadProjection(sideChatId);
-    assert.isNotNull(started.providerThreads[0]?.forkedFrom);
-    assert.lengthOf(started.contextHandoffs, 1);
-    const [handoff] = started.contextHandoffs;
-    assert.isTrue(
-      handoff!.summaryText.startsWith("You are in a side chat beside the main thread."),
-    );
-    assert.notInclude(handoff!.summaryText, "Main thread activity");
-  }).pipe(Effect.provide(forkCases[0]!.layer)),
+      const started = yield* orchestrator.getThreadProjection(sideChatId);
+      assert.isNotNull(started.providerThreads[0]?.forkedFrom);
+      assert.lengthOf(started.contextHandoffs, 1);
+      const [handoff] = started.contextHandoffs;
+      assert.isTrue(
+        handoff!.summaryText.startsWith("You are in a side chat beside the main thread."),
+      );
+      assert.notInclude(handoff!.summaryText, "Main thread activity");
+    }).pipe(Effect.provide(forkCases[0]!.layer)),
 );
 
 it.effect("a side chat waits for the parent's new worktree, also after its setup ended", () =>
@@ -1025,7 +1030,7 @@ it.effect("a side chat opened during the parent's first turn starts from a diges
     yield* fork("side-chat-busy-fork", parentId, sideChatId);
     const created = yield* orchestrator.getThreadProjection(sideChatId);
     assert.isTrue(created.thread.lineage.sideChat);
-    assert.equal(created.thread.runtimeMode, "approval-required");
+    assert.equal(created.thread.runtimeMode, "full-access");
     assert.isNull(created.thread.forkedFrom);
     assert.deepEqual(created.contextTransfers[0]?.sourcePoint, { threadId: parentId });
 
