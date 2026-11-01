@@ -1,6 +1,6 @@
 ---
 name: t3-personal-fork
-description: Build personal customizations in ralfboltshauser/t3code or integrate pingdotgg/t3code updates while preserving those customizations.
+description: Build personal customizations in ralfboltshauser/t3code, integrate upstream updates, or deploy the fork to the local Ubuntu installation.
 ---
 
 Read `FORK.md` before changing this fork. `personal` is the maintained version;
@@ -9,8 +9,10 @@ upstream contribution.
 
 ## Building a customization
 
-1. Start from current `origin/personal`. If the existing checkout is dirty or
-   diverged, keep that work intact and use a sibling worktree for independent work.
+1. Fetch `origin personal` and inspect the working tree and branch history.
+   Fast-forward a clean `personal` branch when possible. Preserve unfinished work;
+   use a sibling worktree from `origin/personal` for independent changes. Inspect
+   and merge diverged local commits rather than resetting them away.
 2. Put substantial personal behavior in its own module and connect it through
    the smallest practical edit to upstream code. Follow upstream refactors when
    adapting the behavior; keeping their old internals creates recurring conflicts.
@@ -44,3 +46,21 @@ write `.personal-sync-blocked` with the reason and summarize it in the final
 report. The launcher checks for this file before publishing, even if the agent
 process exits successfully. Keep it out of commits; remove it after the blocker
 is resolved and its checks pass.
+
+## Local installation
+
+Follow [Updating the local installation](../../../FORK.md#updating-the-local-installation)
+when asked to build, install, update, or roll back the running fork. A source push
+and a deployment have separate completion criteria.
+
+1. Compare the selected source SHA with the installed release's `SOURCE_COMMIT`.
+   Inspect the service and its actual state directory before planning a cutover.
+2. Prepare and smoke-test a release from a clean, checked commit using isolated
+   state. Keep the current service running while building. If a build or check
+   fails, retain the current release and report the failure.
+3. Activate only within the requested deployment scope and after active turns
+   have stopped. Follow the guide's cutover and recovery procedure; hand off a
+   restart that would terminate this conversation's server.
+4. Verify startup and the affected behavior in a real client. Report the installed
+   source SHA, checks performed, and anything unverified. If only source was
+   published, say that the running installation has not been updated.
