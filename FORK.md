@@ -59,6 +59,20 @@ Verify precedence, reversible moves, concurrent durable writes, and UI scoping:
 vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src/settings/DesktopSidebarProfiles.test.ts apps/web/src/sidebarProfilesStorage.browser.test.ts apps/web/src/components/SidebarProfiles.browser.test.tsx apps/mobile/src/state/sidebar-profiles.test.tsx apps/web/src/components/SidebarProfiles.startup.browser.test.tsx
 ```
 
+The boring sidebar reuses the Working-section setting to fold independent work
+inside each project, rather than disabling Working. Keep the existing inbox
+classification and return ordering, selected-thread visibility, and hidden-folder
+status summaries. Expansion is client-local per profile and repository group;
+profile membership is still applied before grouping. Preserve V2's global shelf,
+pinned/snoozed/settled placement, and mobile's existing layout. Owning paths are
+`Sidebar.tsx`, `Sidebar.logic.ts`, `sidebar/SidebarProjectWorkingHeader.tsx`, and
+`lib/sidebarTree.ts` (nested focus recovery). Verify folding, current-thread
+visibility, actionable returns, and keyboard fallback with:
+
+```sh
+vp test run apps/web/src/components/Sidebar.logic.test.ts apps/web/src/components/Sidebar.browser.test.tsx apps/web/src/lib/sidebarTree.browser.test.ts
+```
+
 The fork also maintains project-local skills and coordinated deployment tooling
 under `scripts/personal-fork/`.
 

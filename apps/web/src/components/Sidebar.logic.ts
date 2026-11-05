@@ -966,6 +966,37 @@ export function groupSidebarThreadsByProject<
   return folders.filter((folder) => folder.threads.length > 0 || keepEmpty(folder.group));
 }
 
+export function resolveSidebarProjectFolder<
+  T extends Pick<SidebarThreadSummary, "id" | "environmentId">,
+>(input: {
+  readonly threads: readonly T[];
+  readonly workingKeys: ReadonlySet<string>;
+  readonly collapsed: boolean;
+  readonly workingExpanded: boolean;
+  readonly routeThreadKey: string | null;
+}) {
+  const threads: T[] = [];
+  const workingThreads: T[] = [];
+  const hiddenThreads: T[] = [];
+  let workingCount = 0;
+  for (const thread of input.threads) {
+    const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+    const working = input.workingKeys.has(key);
+    if (working) workingCount++;
+    const visible =
+      key === input.routeThreadKey || (!input.collapsed && (!working || input.workingExpanded));
+    if (visible) (working ? workingThreads : threads).push(thread);
+    else if (input.collapsed) hiddenThreads.push(thread);
+  }
+  return {
+    threads,
+    workingThreads,
+    hiddenThreads,
+    workingCount,
+    showWorkingHeader: !input.collapsed && workingCount > 0,
+  };
+}
+
 export type SidebarV2TopStatusKind =
   | "approval"
   | "done"

@@ -157,7 +157,12 @@ project's folder comes last and shows only while it has active threads. Click a 
 close it. A closed folder shows how many threads it holds, and a dot when one of them
 needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
 Pinned threads stay above the folders, and Snoozed and Settled stay below them. In this mode you
-cannot drag threads, and the Working section is off. Each device keeps its own choice.
+cannot drag threads. With **Working section** enabled, each project folds its background
+work into its own collapsed Working section. Finished work and requests for your input return
+to the project's ordinary list. The conversation you have open stays visible even while its
+section is collapsed. Working sections remember their open state per project and profile.
+Turn off **Settings → General → Working section** to keep running threads in the ordinary
+project list. Each device keeps its own choice.
 
 ## Settle finished work
 

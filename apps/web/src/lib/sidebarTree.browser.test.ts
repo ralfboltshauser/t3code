@@ -79,6 +79,19 @@ describe("sidebar keyboard navigation", () => {
     expect(group.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("returns focus to the project when a nested Working group disappears", async () => {
+    using tree = setup();
+    const project = tree.row("project");
+    const working = tree.row("working", "project");
+    const thread = tree.row("thread", "working");
+    tree.row("unrelated");
+    tree.install();
+    thread.focus();
+    working.remove();
+    thread.remove();
+    await vi.waitFor(() => expect(document.activeElement).toBe(project));
+  });
+
   it("opens the row menu on Shift+F10 release without moving focus", () => {
     using tree = setup();
     tree.row("first");

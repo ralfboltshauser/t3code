@@ -32,6 +32,7 @@ import {
   type SidebarSection,
   resolveSidebarDropVerb,
   groupSidebarThreadsByProject,
+  resolveSidebarProjectFolder,
   resolveSidebarFolderDot,
   sidebarFolderExpansionKeys,
 } from "./Sidebar.logic";
@@ -1580,6 +1581,51 @@ describe("groupSidebarThreadsByProject", () => {
       { projectKey: "t3code", threads: ["a", "b"] },
       { projectKey: "fleet", threads: [] },
     ]);
+  });
+});
+
+describe("resolveSidebarProjectFolder", () => {
+  it("keeps background work collapsed, preserves the route, and separates visible from hidden members", () => {
+    const threads = ["ready", "running", "other"].map((id) => ({
+      id: ThreadId.make(id),
+      environmentId: localEnvironmentId,
+    }));
+    const key = (thread: (typeof threads)[number]) =>
+      scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+    const workingKeys = new Set(threads.slice(1).map(key));
+    const resolve = (collapsed: boolean, workingExpanded: boolean, routeThreadKey: string | null) =>
+      resolveSidebarProjectFolder({
+        threads,
+        workingKeys,
+        collapsed,
+        workingExpanded,
+        routeThreadKey,
+      });
+    const ids = (list: typeof threads) => list.map((thread) => thread.id);
+    const folded = resolve(false, false, null);
+    expect(ids(folded.threads)).toEqual(["ready"]);
+    expect(folded.workingThreads).toEqual([]);
+    expect(folded.workingCount).toBe(2);
+    expect(folded.showWorkingHeader).toBe(true);
+    const selected = resolve(false, false, key(threads[1]!));
+    expect(ids(selected.workingThreads)).toEqual(["running"]);
+    expect(selected.workingCount).toBe(2);
+    expect(ids(resolve(false, true, null).workingThreads)).toEqual(["running", "other"]);
+    const closed = resolve(true, true, key(threads[1]!));
+    expect(closed.threads).toEqual([]);
+    expect(ids(closed.workingThreads)).toEqual(["running"]);
+    expect(ids(closed.hiddenThreads)).toEqual(["ready", "other"]);
+    expect(closed.showWorkingHeader).toBe(false);
+    expect(ids(resolve(true, false, null).hiddenThreads)).toEqual(["ready", "running", "other"]);
+    const returned = resolveSidebarProjectFolder({
+      threads,
+      workingKeys: new Set<string>(),
+      collapsed: false,
+      workingExpanded: false,
+      routeThreadKey: null,
+    });
+    expect(ids(returned.threads)).toEqual(["ready", "running", "other"]);
+    expect(returned.showWorkingHeader).toBe(false);
   });
 });
 

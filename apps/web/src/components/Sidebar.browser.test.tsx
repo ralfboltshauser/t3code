@@ -1,4 +1,10 @@
-import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import {
+  DEFAULT_CLIENT_SETTINGS,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
@@ -6,12 +12,15 @@ import { render } from "../../test/render";
 import { openCommandPalette } from "../commandPaletteBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
-import { useProjects } from "../state/entities";
+import { useQuietThreadShells, useProjects } from "../state/entities";
+import { makeThreadFixture } from "../test-fixtures";
+import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import type { Project } from "../types";
 import Sidebar from "./Sidebar";
 import { SidebarProvider } from "./ui/sidebar";
 
 vi.mock("../state/entities", { spy: true });
+vi.mock("../hooks/useThreadRouteTarget", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
 vi.mock("../commandPaletteBus", () => ({
   openCommandPalette: vi.fn(),
@@ -85,5 +94,93 @@ describe("sidebar header new thread", () => {
       expect(openCommandPalette).not.toHaveBeenCalled();
       expect(startThread).toHaveBeenCalledExactlyOnceWith(currentProjectRef);
     }
+  });
+});
+
+describe("project Working sections", () => {
+  it("folds each project independently and returns actionable work without hiding the current conversation", async () => {
+    using stack = new DisposableStack();
+    const previousSettings = getClientSettings();
+    const expansionKey = "t3code:sidebar:project-working-expanded:v1";
+    const previousExpansion = localStorage.getItem(expansionKey);
+    localStorage.removeItem(expansionKey);
+    stack.defer(() => {
+      __setClientSettingsForTests(previousSettings);
+      if (previousExpansion === null) localStorage.removeItem(expansionKey);
+      else localStorage.setItem(expansionKey, previousExpansion);
+      vi.mocked(useQuietThreadShells).mockRestore();
+      vi.mocked(useThreadRouteTarget).mockRestore();
+    });
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      boringSidebarEnabled: true,
+      sidebarWorkingShelfEnabled: true,
+    });
+    const projects = [project("alpha"), project("beta")];
+    vi.mocked(useProjects).mockReturnValue(projects);
+    vi.mocked(useThreadRouteTarget).mockReturnValue(null);
+    const running = (id: string, projectIndex: number) =>
+      makeThreadFixture({
+        id: ThreadId.make(id),
+        title: id,
+        environmentId: projects[projectIndex]!.environmentId,
+        projectId: projects[projectIndex]!.id,
+        settledOverride: "active",
+        runtime: {
+          status: "running",
+          activeRunId: null,
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          providerName: null,
+          lastError: null,
+          updatedAt: "2026-11-05T00:00:00.000Z",
+        },
+      });
+    const alpha = running("Alpha background", 0);
+    const beta = running("Beta background", 1);
+    vi.mocked(useQuietThreadShells).mockReturnValue([alpha, beta]);
+    const ui = () => (
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>
+    );
+    await using screen = await render(ui());
+    const alphaHeader = screen.getByRole("button", {
+      name: "Working in alpha, 1 thread",
+      exact: true,
+    });
+    const betaHeader = screen.getByRole("button", {
+      name: "Working in beta, 1 thread",
+      exact: true,
+    });
+    await expect.element(alphaHeader).toHaveAttribute("aria-expanded", "false");
+    await expect.element(betaHeader).toHaveAttribute("aria-expanded", "false");
+    await expect
+      .element(screen.getByRole("button", { name: /^Alpha background/ }))
+      .not.toBeInTheDocument();
+    await userEvent.click(alphaHeader);
+    await expect.element(screen.getByRole("button", { name: /^Alpha background/ })).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: /^Beta background/ }))
+      .not.toBeInTheDocument();
+    await userEvent.click(alphaHeader);
+    vi.mocked(useThreadRouteTarget).mockReturnValue({
+      kind: "server",
+      threadRef: { environmentId: alpha.environmentId, threadId: alpha.id },
+    });
+    await screen.rerender(ui());
+    await expect.element(screen.getByRole("button", { name: /^Alpha background/ })).toBeVisible();
+    await expect.element(alphaHeader).toHaveAttribute("aria-expanded", "false");
+    vi.mocked(useThreadRouteTarget).mockReturnValue(null);
+    vi.mocked(useQuietThreadShells).mockReturnValue([
+      alpha,
+      { ...beta, hasPendingUserInput: true },
+    ]);
+    await screen.rerender(ui());
+    await expect
+      .element(screen.getByRole("button", { name: /^Alpha background/ }))
+      .not.toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: /^Beta background/ })).toBeVisible();
+    await expect.element(betaHeader).not.toBeInTheDocument();
+    await expect.element(alphaHeader).toHaveAttribute("aria-expanded", "false");
   });
 });
