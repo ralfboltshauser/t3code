@@ -1,3 +1,4 @@
+import { loadSidebarProfiles, sidebarProfilesActive } from "../sidebarProfiles";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -40,7 +41,7 @@ import { StandalonePage, StandalonePageHeader } from "../components/ui/standalon
 import { AnchoredToastProvider, ToastProvider } from "../components/ui/toast";
 import { isElectron } from "../env";
 import { cn } from "../lib/utils";
-import { useClientSettings } from "../hooks/useSettings";
+import { ensureClientSettingsHydrated, useClientSettings } from "../hooks/useSettings";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKeyFromPath,
@@ -313,7 +314,7 @@ function errorReport(error: unknown, pathname: string): string {
   return lines.join("\n");
 }
 
-function EventRouter({
+export function EventRouter({
   skipInitialBootstrapNavigation,
 }: {
   readonly skipInitialBootstrapNavigation: boolean;
@@ -332,6 +333,11 @@ function EventRouter({
 
     void (async () => {
       if (!payload.bootstrapProjectId || !payload.bootstrapThreadId) {
+        return;
+      }
+      await Promise.all([ensureClientSettingsHydrated(), loadSidebarProfiles()]);
+      if (sidebarProfilesActive()) {
+        handledBootstrapThreadIdRef.current = payload.bootstrapThreadId;
         return;
       }
       const bootstrapProject = readProject(

@@ -1,3 +1,7 @@
+import { useNavigate } from "@tanstack/react-router";
+import { useAtomValue } from "@effect/atom-react";
+import { EventRouter } from "../routes/__root";
+import { loadSidebarProfiles } from "../sidebarProfiles";
 import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import {
   applySidebarProfileMutation,
@@ -16,6 +20,9 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { readProject, useProjects, useVisibleThreadShells } from "../state/entities";
 import { newDraftId, newThreadId } from "../lib/utils";
 
+vi.mock("@tanstack/react-router", { spy: true });
+vi.mock("@effect/atom-react", { spy: true });
+vi.mock("../sidebarProfiles", { spy: true });
 vi.mock("../state/entities", { spy: true });
 vi.mock("../hooks/useSettings", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
@@ -91,3 +98,37 @@ describe("profile startup", () => {
     },
   );
 });
+
+it.each([true, false])(
+  "server welcome respects profile startup when enabled=%s",
+  async (enabled) => {
+    using cleanup = new DisposableStack();
+    const previous = useSidebarProfiles.getState();
+    const settings = getClientSettings();
+    cleanup.defer(() => {
+      useSidebarProfiles.setState(previous);
+      __setClientSettingsForTests(settings);
+      vi.mocked(useAtomValue).mockRestore();
+      vi.mocked(useNavigate).mockRestore();
+      vi.mocked(loadSidebarProfiles).mockRestore();
+      vi.mocked(readProject).mockRestore();
+    });
+    __setClientSettingsForTests({ ...DEFAULT_CLIENT_SETTINGS, boringSidebarEnabled: true });
+    useSidebarProfiles.setState({
+      document: applySidebarProfileMutation(defaultSidebarProfiles(), { kind: "enable", enabled }),
+      ready: true,
+    });
+    vi.mocked(readProject).mockReturnValue(null);
+    vi.mocked(loadSidebarProfiles).mockResolvedValue(undefined);
+    vi.mocked(useAtomValue).mockReturnValue({
+      bootstrapProjectId: ProjectId.make("bootstrap"),
+      bootstrapThreadId: newThreadId(),
+      environment: { environmentId: EnvironmentId.make("host") },
+    } as never);
+    const navigate = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useNavigate).mockReturnValue(navigate);
+    await using _screen = await render(<EventRouter skipInitialBootstrapNavigation={false} />);
+    if (enabled) expect(navigate).not.toHaveBeenCalled();
+    else await vi.waitFor(() => expect(navigate).toHaveBeenCalledOnce());
+  },
+);

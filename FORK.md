@@ -46,8 +46,9 @@ IndexedDB, and mobile uses serialized preference transforms. Switching retains
 drafts and running work; disabling retains assignments. Preserve filtering in
 sidebar groups, search, new-thread defaults, and native project selection, and
 preserve profile intent across asynchronous project creation and pairing.
-The index route waits for both profile and client settings hydration before
-starting any automatic draft, so reload cannot replace a saved profile.
+Both index drafts and server-welcome bootstrap navigation wait for profile and
+client settings hydration. Profiles suppress bootstrap navigation, so reload
+cannot replace a saved context.
 
 Owning modules are `packages/client-runtime/src/sidebarProfiles.ts`, web
 `sidebarProfiles.ts` and `SidebarProfiles.tsx`, desktop
