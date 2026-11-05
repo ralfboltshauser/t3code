@@ -33,6 +33,15 @@ const mocks = vi.hoisted(() => ({
   writeSettings: vi.fn(),
   writeText: vi.fn(),
 }));
+vi.mock("../../state/sidebar-profiles", async () => {
+  const entities = await import("../../state/entities");
+  return {
+    useMobileProfileProjects: entities.useProjects,
+    useMobileProfileRoute: () => undefined,
+    mobileCreationProfile: () => "general",
+    assignMobileCreatedProject: async () => undefined,
+  };
+});
 vi.mock("../../state/atom-registry", () => ({
   appAtomRegistry: {
     get: (atom: Atom.Atom<unknown>) => mocks.registry().get(atom),

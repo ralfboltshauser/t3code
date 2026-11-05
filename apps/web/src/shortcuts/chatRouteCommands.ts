@@ -1,3 +1,4 @@
+import { filterProfileProjects } from "../sidebarProfiles";
 import { AuthPreviewOperateScope, type EnvironmentId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 
@@ -71,7 +72,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       activeDraftThread,
       activeThread: activeThread ?? undefined,
       defaultProjectRef: resolveDefaultProjectRef(
-        readProjects(),
+        filterProfileProjects(readProjects()),
         useUiStateStore.getState().projectOrder,
       ),
       handleNewThread,
@@ -80,7 +81,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
   // Grouped like the sidebar, so the shortcut and the New thread button agree.
   const readProjectGroups = () =>
     buildSidebarProjectSnapshots({
-      projects: readProjects(),
+      projects: filterProfileProjects(readProjects()),
       groupScratchProjects: true,
       settings: selectProjectGroupingSettings(getClientSettings()),
       primaryEnvironmentId: appAtomRegistry.get(primaryEnvironmentIdAtom),

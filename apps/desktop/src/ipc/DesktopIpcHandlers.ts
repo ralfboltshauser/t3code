@@ -1,3 +1,4 @@
+import { getSidebarProfiles, mutateSidebarProfiles } from "./methods/sidebarProfiles.ts";
 import * as Effect from "effect/Effect";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
@@ -100,6 +101,8 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setLocalEnvironmentEnabled);
   yield* ipc.handle(getLocalEnvironmentBearerToken);
 
+  yield* ipc.handle(getSidebarProfiles);
+  yield* ipc.handle(mutateSidebarProfiles);
   yield* ipc.handle(getClientSettings);
   yield* ipc.handle(setClientSettings);
   yield* ipc.handle(getConnectionCatalog);

@@ -1,3 +1,4 @@
+import { mobileCreationProfile, assignMobileNewEnvironment } from "./sidebar-profiles";
 import * as Dialog from "../components/ui/Dialog";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigation } from "@react-navigation/native";
@@ -54,6 +55,8 @@ export async function pairEnvironment(
   pairingUrl: string,
   expectedEnvironmentId?: EnvironmentId,
 ): Promise<PairingOutcome> {
+  const profileId = mobileCreationProfile();
+  const known = [...appAtomRegistry.get(environmentCatalog.catalogValueAtom).entries.keys()];
   const result = await runAtomCommand(
     appAtomRegistry,
     connectPairingUrlCommand,
@@ -61,6 +64,13 @@ export async function pairEnvironment(
     { reportFailure: false },
   );
   if (AsyncResult.isSuccess(result)) {
+    if (!expectedEnvironmentId)
+      await assignMobileNewEnvironment(result.value, known, profileId).catch(() =>
+        Dialog.alert(
+          "Environment connected",
+          "Set its default in Manage profiles. Reconnecting is unnecessary.",
+        ),
+      );
     appAtomRegistry.set(connectionPairingUrlAtom, "");
     return { ok: true, error: null };
   }

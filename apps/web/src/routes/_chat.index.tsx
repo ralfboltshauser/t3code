@@ -1,3 +1,5 @@
+import { useProfilesActive } from "../sidebarProfiles";
+import { SidebarProfileLanding } from "../components/SidebarProfiles";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -30,7 +32,11 @@ function ChatIndexRouteView() {
     if (environments.length === 0) return <HostedEmptyState />;
   }
 
-  return <IndexDraftLanding />;
+  return <ProfileAwareLanding />;
+}
+
+function ProfileAwareLanding() {
+  return useProfilesActive() ? <SidebarProfileLanding /> : <IndexDraftLanding />;
 }
 
 function IndexDraftLanding() {

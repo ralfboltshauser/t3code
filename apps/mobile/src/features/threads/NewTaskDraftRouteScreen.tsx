@@ -1,3 +1,4 @@
+import { useMobileProfileRoute } from "../../state/sidebar-profiles";
 import * as Dialog from "../../components/ui/Dialog";
 import {
   CommonActions,
@@ -108,6 +109,9 @@ export function NewTaskDraftRouteScreen({ route }: StaticScreenProps<NewTaskDraf
     (candidate) =>
       candidate.environmentId === initialProjectRef.environmentId &&
       candidate.id === initialProjectRef.projectId,
+  );
+  useMobileProfileRoute(
+    project ? { environmentId: project.environmentId, projectId: project.id } : null,
   );
   // A project can drop out of the list and come back while its catalog stays ready. The checkout
   // keeps the last project this route resolved, so that gap reads the same checkout.

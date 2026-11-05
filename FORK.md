@@ -37,6 +37,25 @@ Verify with:
 vp test run apps/server/src/orchestration-v2/ThreadFork.execution.test.ts apps/server/src/orchestration-v2/ProviderTurnStartService.test.ts -t 'side chat'
 ```
 
+Sidebar profiles are an opt-in Labs feature that scopes the boring sidebar by
+physical `(environmentId, projectId)` membership before repository grouping.
+Project assignments override environment defaults, with a permanent General
+fallback. Keep client-local profile persistence separate from ordinary settings
+snapshots: desktop uses `DesktopSidebarProfiles` and IPC, web uses transactional
+IndexedDB, and mobile uses serialized preference transforms. Switching retains
+drafts and running work; disabling retains assignments. Preserve filtering in
+sidebar groups, search, new-thread defaults, and native project selection, and
+preserve profile intent across asynchronous project creation and pairing.
+
+Owning modules are `packages/client-runtime/src/sidebarProfiles.ts`, web
+`sidebarProfiles.ts` and `SidebarProfiles.tsx`, desktop
+`settings/DesktopSidebarProfiles.ts`, and mobile `state/sidebar-profiles.ts`.
+Verify precedence, reversible moves, concurrent durable writes, and UI scoping:
+
+```sh
+vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src/settings/DesktopSidebarProfiles.test.ts apps/web/src/sidebarProfilesStorage.browser.test.ts apps/web/src/components/SidebarProfiles.browser.test.tsx
+```
+
 The fork also maintains project-local skills and coordinated deployment tooling
 under `scripts/personal-fork/`.
 

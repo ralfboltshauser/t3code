@@ -1,3 +1,4 @@
+import type { SidebarProfilesDocument, SidebarProfileMutation } from "./sidebarProfiles.ts";
 import * as Schema from "effect/Schema";
 import type { PreviewCaptureFailureEncoded } from "./previewCapture.ts";
 
@@ -1052,6 +1053,9 @@ export interface DesktopBridge {
   getLocalEnvironmentEnabled: () => boolean;
   setLocalEnvironmentEnabled: (enabled: boolean) => Promise<void>;
   getLocalEnvironmentBearerToken: () => Promise<string>;
+  getSidebarProfiles: () => Promise<SidebarProfilesDocument>;
+  mutateSidebarProfiles: (mutation: SidebarProfileMutation) => Promise<SidebarProfilesDocument>;
+  onSidebarProfilesChanged: (listener: (document: SidebarProfilesDocument) => void) => () => void;
   getClientSettings: () => Promise<ClientSettings | null>;
   setClientSettings: (settings: ClientSettings) => Promise<void>;
   getConnectionCatalog: () => Promise<string | null>;

@@ -1,3 +1,4 @@
+import { CreationProfileSelect } from "../profiles/CreationProfileSelect";
 import { ListRow } from "../../components/ui/ListRow";
 import * as Dialog from "../../components/ui/Dialog";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
@@ -205,6 +206,7 @@ function PairingForm({
           paddingTop: 4,
         }}
       >
+        {!routeFor ? <CreationProfileSelect /> : null}
         <View collapsable={false} className="gap-6.5">
           <PairingScanCard
             cameraActive={cameraPermission?.granted === true && screenFocused && !scanComplete}

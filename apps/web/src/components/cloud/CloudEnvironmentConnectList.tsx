@@ -1,3 +1,8 @@
+import {
+  currentCreationProfile,
+  sidebarProfilesActive,
+  mutateSidebarProfiles,
+} from "../../sidebarProfiles";
 import { findErrorTraceId } from "@t3tools/client-runtime/errors";
 import {
   type EnvironmentConnectionPresentation,
@@ -100,8 +105,12 @@ export function CloudEnvironmentConnectRows({
     if (environmentsState.refreshing || environmentsState.offline) return;
     await refreshRelayEnvironments();
   });
-  const connectRelayEnvironment = (environment: RelayClientEnvironmentRecord) =>
-    registerEnvironment(
+  const connectRelayEnvironment = async (environment: RelayClientEnvironmentRecord) => {
+    const profileId = currentCreationProfile();
+    const assign =
+      sidebarProfilesActive() &&
+      !savedEnvironments.some((saved) => saved.environmentId === environment.environmentId);
+    const result = await registerEnvironment(
       new RelayConnectionRegistration({
         target: new RelayConnectionTarget({
           environmentId: environment.environmentId,
@@ -109,6 +118,21 @@ export function CloudEnvironmentConnectRows({
         }),
       }),
     );
+    if (result._tag === "Success" && assign) {
+      await mutateSidebarProfiles({
+        kind: "assign-environment",
+        environmentId: environment.environmentId,
+        profileId,
+      }).catch(() =>
+        toastManager.add({
+          type: "error",
+          title: "Environment connected; profile assignment needs retry",
+          description: "Set its default in Manage profiles.",
+        }),
+      );
+    }
+    return result;
+  };
   const [connectingEnvironmentIds, setConnectingEnvironmentIds] = useState<
     ReadonlySet<EnvironmentId>
   >(new Set());

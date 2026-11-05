@@ -1,3 +1,4 @@
+import { useMobileProfileProjects } from "../../state/sidebar-profiles";
 import {
   WorkspaceColumnsRendererContext,
   WorkspacePresentationHostContext,
@@ -56,7 +57,6 @@ import {
 } from "../../lib/layout";
 import type { ThreadListFilters } from "../../persistence/mobile-preferences";
 import { appAtomRegistry } from "../../state/atom-registry";
-import { useProjects } from "../../state/entities";
 import { environmentThreadShells } from "../../state/threads";
 import { mobilePreferencesAtom } from "../../state/preferences";
 import {
@@ -613,7 +613,7 @@ function AdaptiveWorkspaceLayoutContent(
   const handleSelectThreadRoute = (params: ReactNavigation.RootParamList["Thread"]) =>
     handleSelectDetail({ name: "Thread", params });
 
-  const projects = useProjects();
+  const projects = useMobileProfileProjects();
   const compactAndroidSettings =
     Platform.OS === "android" && androidSettingsOpen && !layout.usesSplitView;
   // Reads the open page when pressed, so the layout context doesn't change on every navigation.

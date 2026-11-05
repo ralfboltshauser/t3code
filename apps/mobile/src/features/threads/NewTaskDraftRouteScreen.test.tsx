@@ -47,6 +47,15 @@ function useSnapshot(): Snapshot {
   return useSyncExternalStore(harness.subscribe, () => harness.state.snapshot!);
 }
 
+vi.mock("../../state/sidebar-profiles", async () => {
+  const entities = await import("../../state/entities");
+  return {
+    useMobileProfileProjects: entities.useProjects,
+    useMobileProfileRoute: () => undefined,
+    mobileCreationProfile: () => "general",
+    assignMobileCreatedProject: async () => undefined,
+  };
+});
 vi.mock("react-native", () => ({
   View: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));

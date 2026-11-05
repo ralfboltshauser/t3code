@@ -1,3 +1,5 @@
+import { assignCreatedProject, projectProfile, useProfilesActive } from "../sidebarProfiles";
+import { ProfileSelect } from "./SidebarProfiles";
 import { useParams } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -92,6 +94,8 @@ export function AddProjectToMachineDialogHost() {
 
 function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRequest }) {
   const id = useId();
+  const profilesActive = useProfilesActive();
+  const [profileId, setProfileId] = useState(() => projectProfile(request.projectRef));
   const project = useProject(request.projectRef);
   const handleNewThread = useNewThreadHandler();
   const { draftId: routeDraftId } = useParams({ strict: false });
@@ -201,6 +205,8 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
         destinationPath: destinationPath.trim(),
         files: files.filter((file) => selectedFiles.has(file.path)).map((file) => file.path),
       });
+      if (profilesActive)
+        await assignCreatedProject(scopeProjectRef(target.environmentId, projectId), profileId);
       close();
       openClonedProject(scopeProjectRef(target.environmentId, projectId));
     } catch (cause) {
@@ -217,6 +223,15 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
       }}
     >
       <DialogPopup className="sm:max-w-xl">
+        {profilesActive ? (
+          <div className="px-5 pt-4">
+            <ProfileSelect
+              value={profileId}
+              onChange={setProfileId}
+              label="Profile for the project copy"
+            />
+          </div>
+        ) : null}
         <form
           className="flex min-h-0 flex-col"
           onSubmit={(event) => {

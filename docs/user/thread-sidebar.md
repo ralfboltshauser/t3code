@@ -328,3 +328,25 @@ several selected threads together. Choose **Wake thread** to bring a thread back
 A snoozed thread keeps working and stays hidden until its wake time, even while
 its agent wakes itself for background work. It comes back early only when it needs
 an approval or answer from you, when a run fails, or when you send it a message.
+
+## Sidebar profiles (Labs)
+
+Enable **Settings → Labs → Sidebar profiles** to separate Work, Personal, and other
+contexts. On web and desktop this also enables the boring sidebar. Use **Manage
+profiles** to create, rename, reorder, or delete profiles, assign individual
+projects, and choose an environment's default profile. Projects without an
+individual assignment inherit that default, including projects created later.
+The same environment can hold projects from several profiles.
+
+Switch profiles from the sidebar. **All** shows every profile. New projects use
+the selected profile; the creation flow lets you choose another. To move an
+existing project, right-click its folder and choose **Move to profile**, or use
+the project list in Manage profiles. A grouped folder moves only its currently
+visible project copies. Deleting a profile moves its assignments to a destination
+you choose; General can be renamed but cannot be deleted.
+
+Profiles are saved separately on each desktop installation, browser origin, and
+mobile device. They organize navigation rather than access: switching keeps
+agents running and connections available. Opening a thread link reveals its
+owning profile. Turning profiles off, or returning to the V2 sidebar, retains
+your assignments and shows all projects again.

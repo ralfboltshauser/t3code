@@ -1,3 +1,5 @@
+import { CreationProfileSelect } from "../profiles/CreationProfileSelect";
+import { mobileCreationProfile, assignMobileCreatedProject } from "../../state/sidebar-profiles";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 import * as Dialog from "../../components/ui/Dialog";
@@ -179,6 +181,7 @@ function AddProjectShell(props: { readonly children: ReactNode; readonly title: 
           gap: Platform.OS === "android" ? 16 : 10,
         }}
       >
+        <CreationProfileSelect />
         {props.children}
       </ScrollView>
     </SettingsScreen>
@@ -731,6 +734,7 @@ function useCreateProject(environment: EnvironmentOption | null) {
   const projects = useProjects();
 
   return async (workspaceRoot: string, originRoute = getActiveRoute(navigation)) => {
+    const targetProfile = mobileCreationProfile();
     if (
       !environment ||
       !canCreateProjectInEnvironment(environment.connectionState) ||
@@ -786,6 +790,15 @@ function useCreateProject(environment: EnvironmentOption | null) {
     if (AsyncResult.isFailure(result)) {
       return result;
     }
+    await assignMobileCreatedProject(
+      { environmentId: environment.environmentId, projectId },
+      targetProfile,
+    ).catch(() =>
+      Dialog.alert(
+        "Project added",
+        "Assign its profile in Manage profiles. Do not create it again.",
+      ),
+    );
     // A successful command can precede its project in the client store. The
     // draft treats a missing project as a reason to return to the chooser.
     const project = await waitForProject(
@@ -1109,6 +1122,7 @@ export function AddProjectNewScreen(props: { readonly environmentId?: string | s
   const submittingRef = useRef(false);
   const submit = async () => {
     if (!environment || trimmedName.length === 0 || submittingRef.current) return;
+    const targetProfile = mobileCreationProfile();
     const originRoute = getActiveRoute(navigation);
     submittingRef.current = true;
     setError(null);
@@ -1124,6 +1138,15 @@ export function AddProjectNewScreen(props: { readonly environmentId?: string | s
       return;
     }
     const { projectId, workspaceRoot, commitError } = result.value;
+    await assignMobileCreatedProject(
+      { environmentId: environment.environmentId, projectId },
+      targetProfile,
+    ).catch(() =>
+      Dialog.alert(
+        "Project created",
+        "Assign its profile in Manage profiles. Do not create it again.",
+      ),
+    );
     if (commitError !== undefined) {
       Dialog.alert("Created without a first commit", commitError);
     }
@@ -1422,6 +1445,7 @@ export function AddProjectDestinationScreen(props: {
       return;
     }
 
+    const targetProfile = mobileCreationProfile();
     const originRoute = getActiveRoute(navigation);
     setIsSubmitting(true);
     const projectId = ProjectId.make(uuidv4());
@@ -1439,6 +1463,15 @@ export function AddProjectDestinationScreen(props: {
     if (AsyncResult.isFailure(startResult)) {
       setError(errorMessage(Cause.squash(startResult.cause)));
     } else {
+      await assignMobileCreatedProject(
+        { environmentId: environment.environmentId, projectId },
+        targetProfile,
+      ).catch(() =>
+        Dialog.alert(
+          "Clone started",
+          "Assign its profile in Manage profiles. Do not clone it again.",
+        ),
+      );
       void suggestAppAccessForRemote(checkAppAccess, environment.environmentId, remoteUrl);
       // Wait for the create event; the client store otherwise falls back to the project picker and loses clone controls.
       const project = await waitForProject(

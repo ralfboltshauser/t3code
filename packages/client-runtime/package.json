@@ -530,6 +530,10 @@
     "./provider-instance-ids": {
       "types": "./src/providerInstanceIds.ts",
       "default": "./src/providerInstanceIds.ts"
+    },
+    "./sidebar-profiles": {
+      "types": "./src/sidebarProfiles.ts",
+      "default": "./src/sidebarProfiles.ts"
     }
   },
   "scripts": {

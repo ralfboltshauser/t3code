@@ -1,3 +1,5 @@
+import { SidebarProfileNavigation } from "../components/SidebarProfileNavigation";
+import { SidebarProfileManager } from "../components/SidebarProfiles";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { Outlet, createFileRoute, redirect, useMatches } from "@tanstack/react-router";
 import { useState } from "react";
@@ -30,6 +32,8 @@ function ChatRouteLayout() {
   const shownTarget = modalOpen ? backgroundTarget : threadTarget;
   return (
     <>
+      <SidebarProfileNavigation />
+      <SidebarProfileManager />
       {shownTarget?.kind === "server" && !modalOpen ? (
         <ThreadLinkPrompt threadRef={shownTarget.threadRef} />
       ) : null}

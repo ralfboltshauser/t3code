@@ -125,3 +125,7 @@ export const RECEIVE_PROVIDER_AUTH_CALLBACK_CHANNEL = "desktop:receive-provider-
 export const CANCEL_PROVIDER_AUTH_CALLBACK_CHANNEL = "desktop:cancel-provider-auth-callback";
 export const TAKE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:take-legacy-local-storage";
 export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-local-storage";
+
+export const GET_SIDEBAR_PROFILES_CHANNEL = "desktop:get-sidebar-profiles";
+export const MUTATE_SIDEBAR_PROFILES_CHANNEL = "desktop:mutate-sidebar-profiles";
+export const SIDEBAR_PROFILES_CHANGED_CHANNEL = "desktop:sidebar-profiles-changed";

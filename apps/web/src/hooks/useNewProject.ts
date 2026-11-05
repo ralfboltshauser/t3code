@@ -1,3 +1,4 @@
+import { assignCreatedProject } from "../sidebarProfiles";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   getNewProjectRepository,
@@ -70,6 +71,7 @@ export function useNewProject() {
   return async (input: {
     readonly environmentId: EnvironmentId;
     readonly name: string;
+    readonly profileId?: string | undefined;
     readonly publishTo: NewProjectPublishTarget | null;
   }): Promise<boolean> => {
     const result = await createNew({
@@ -90,6 +92,8 @@ export function useNewProject() {
     }
 
     const { projectId, workspaceRoot, commitError } = result.value;
+    if (input.profileId)
+      await assignCreatedProject(scopeProjectRef(input.environmentId, projectId), input.profileId);
     toastManager.add(
       stackedThreadToast(
         commitError === undefined

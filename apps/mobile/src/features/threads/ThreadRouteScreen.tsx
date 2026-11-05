@@ -1,3 +1,4 @@
+import { useMobileProfileRoute } from "../../state/sidebar-profiles";
 import * as Dialog from "../../components/ui/Dialog";
 import { useRememberThreadProject } from "./useRememberThreadProject";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
@@ -237,6 +238,11 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
   const connectionsReady = useConnectionsReady();
   const { connectionState } = useRemoteConnectionStatus();
   const { selectedThread } = useThreadSelection();
+  useMobileProfileRoute(
+    selectedThread
+      ? { environmentId: selectedThread.environmentId, projectId: selectedThread.projectId }
+      : null,
+  );
   const params = props.route.params ?? {};
   const environmentIdRaw = firstRouteParam(params.environmentId);
   const threadIdRaw = firstRouteParam(params.threadId);

@@ -1,3 +1,4 @@
+import { useMobileProfileProjects } from "../../state/sidebar-profiles";
 import { ActiveNewTaskContext } from "../../state/active-new-task";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { useNowMinuteMs } from "../../lib/clock";
@@ -227,6 +228,7 @@ export function NewTaskFlowProvider(
   }>,
 ) {
   const projects = useProjects();
+  const profileProjects = useMobileProfileProjects();
   const threads = useThreadShells();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const groupingSettings = useMobileProjectGroupingSettings();
@@ -234,7 +236,7 @@ export function NewTaskFlowProvider(
 
   const projectScopes = sortHomeProjectScopes({
     scopes: buildHomeProjectScopes({
-      projects,
+      projects: profileProjects,
       environmentId: null,
       projectGroupingMode: groupingSettings.sidebarProjectGroupingMode,
     }),

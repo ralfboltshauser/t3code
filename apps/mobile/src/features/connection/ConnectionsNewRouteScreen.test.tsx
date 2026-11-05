@@ -12,6 +12,7 @@ const { Children, harness } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("../profiles/CreationProfileSelect", () => ({ CreationProfileSelect: () => null }));
 vi.mock("react-native", () => ({
   View: Children,
   Pressable: Children,

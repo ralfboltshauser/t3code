@@ -129,6 +129,12 @@ const testServerConfigs = () =>
     ["environment-ssh", { settings: testState.targetSettings }],
   ]);
 
+vi.mock(import("../sidebarProfiles"), () => ({
+  sidebarProfilesActive: () => false,
+  projectProfile: () => "general",
+  useProfileProjects: () => [],
+}));
+
 vi.mock("../rpc/atomRegistry", () => ({
   appAtomRegistry: {
     get: (atom: unknown) =>

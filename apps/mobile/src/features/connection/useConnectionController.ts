@@ -1,3 +1,6 @@
+import { mobileCreationProfile, assignMobileNewEnvironment } from "../../state/sidebar-profiles";
+import * as Dialog from "../../components/ui/Dialog";
+import { AsyncResult } from "effect/reactivity";
 import { useAtomValue } from "@effect/atom-react";
 import {
   RelayConnectionRegistration,
@@ -68,13 +71,23 @@ export function useConnectionController() {
     [registeredIds, relayEnvironments],
   );
 
-  const connectPairingUrl = (pairingUrl: string, expectedEnvironmentId?: EnvironmentId) =>
-    connectPairingUrlMutation({
+  const connectPairingUrl = async (pairingUrl: string, expectedEnvironmentId?: EnvironmentId) => {
+    const profileId = mobileCreationProfile();
+    const known = connectedEnvironments.map((e) => e.environmentId);
+    const result = await connectPairingUrlMutation({
       pairingUrl,
       ...(expectedEnvironmentId === undefined ? {} : { expectedEnvironmentId }),
     });
-  const connectRelayEnvironment = (environment: RelayClientEnvironmentRecord) =>
-    registerEnvironment(
+    if (AsyncResult.isSuccess(result) && !expectedEnvironmentId)
+      await assignMobileNewEnvironment(result.value, known, profileId).catch(() =>
+        Dialog.alert("Environment connected", "Set its default in Manage profiles."),
+      );
+    return result;
+  };
+  const connectRelayEnvironment = async (environment: RelayClientEnvironmentRecord) => {
+    const profileId = mobileCreationProfile();
+    const known = connectedEnvironments.map((e) => e.environmentId);
+    const result = await registerEnvironment(
       new RelayConnectionRegistration({
         target: new RelayConnectionTarget({
           environmentId: environment.environmentId,
@@ -82,6 +95,12 @@ export function useConnectionController() {
         }),
       }),
     );
+    if (AsyncResult.isSuccess(result))
+      await assignMobileNewEnvironment(environment.environmentId, known, profileId).catch(() =>
+        Dialog.alert("Environment connected", "Set its default in Manage profiles."),
+      );
+    return result;
+  };
   const removeEnvironment = (environmentId: EnvironmentId) =>
     removeEnvironmentMutation(environmentId);
   const retryEnvironment = (environmentId: EnvironmentId) =>

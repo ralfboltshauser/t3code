@@ -119,6 +119,15 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.sendSync(IpcChannels.GET_LOCAL_ENVIRONMENT_ENABLED_CHANNEL) !== false,
   setLocalEnvironmentEnabled: (enabled) =>
     ipcRenderer.invoke(IpcChannels.SET_LOCAL_ENVIRONMENT_ENABLED_CHANNEL, enabled),
+  getSidebarProfiles: () => ipcRenderer.invoke(IpcChannels.GET_SIDEBAR_PROFILES_CHANNEL),
+  mutateSidebarProfiles: (mutation) =>
+    ipcRenderer.invoke(IpcChannels.MUTATE_SIDEBAR_PROFILES_CHANNEL, mutation),
+  onSidebarProfilesChanged: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, document: Parameters<typeof listener>[0]) =>
+      listener(document);
+    ipcRenderer.on(IpcChannels.SIDEBAR_PROFILES_CHANGED_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(IpcChannels.SIDEBAR_PROFILES_CHANGED_CHANNEL, handler);
+  },
   getClientSettings: () => ipcRenderer.invoke(IpcChannels.GET_CLIENT_SETTINGS_CHANNEL),
   setClientSettings: (settings) =>
     ipcRenderer.invoke(IpcChannels.SET_CLIENT_SETTINGS_CHANNEL, settings),

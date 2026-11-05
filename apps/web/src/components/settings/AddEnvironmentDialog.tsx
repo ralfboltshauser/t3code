@@ -1,3 +1,10 @@
+import type { EnvironmentId } from "@t3tools/contracts";
+import {
+  currentCreationProfile,
+  useProfilesActive,
+  mutateSidebarProfiles,
+} from "../../sidebarProfiles";
+import { ProfileSelect } from "../SidebarProfiles";
 import { pipe } from "effect/Function";
 import { ChevronsLeftRightEllipsisIcon, PlusIcon, TerminalIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
@@ -82,6 +89,28 @@ export function AddEnvironmentDialog({
   readonly onOpenChange: (open: boolean) => void;
   readonly onErrorChange: (error: string | null) => void;
 }) {
+  const profilesActive = useProfilesActive();
+  const [profileId, setProfileId] = useState(currentCreationProfile);
+  const assignNewEnvironment = async (
+    environmentId: EnvironmentId,
+    known: readonly EnvironmentId[],
+    targetProfile: string,
+  ) => {
+    if (routeTarget || !profilesActive || known.includes(environmentId)) return;
+    try {
+      await mutateSidebarProfiles({
+        kind: "assign-environment",
+        environmentId,
+        profileId: targetProfile,
+      });
+    } catch {
+      toastManager.add({
+        type: "error",
+        title: "Environment connected; profile assignment needs retry",
+        description: "Set its default in Manage profiles. Reconnecting is unnecessary.",
+      });
+    }
+  };
   const desktopBridge = window.desktopBridge;
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const connectPairing = useAtomCommand(connectPairingAtom, { reportFailure: false });
@@ -148,6 +177,7 @@ export function AddEnvironmentDialog({
     desktopBridge !== undefined &&
     (isLoadingDiscoveredSshHosts || unsavedDiscoveredSshHosts.length > 0);
   const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) setProfileId(currentCreationProfile());
     if (!nextOpen) {
       savedBackendSessionRef.current += 1;
       setSavedBackendMode("remote");
@@ -163,6 +193,8 @@ export function AddEnvironmentDialog({
     const session = savedBackendSessionRef.current;
     setIsAddingSavedBackend(true);
     onErrorChange(null);
+    const known = savedEnvironments.map((e) => e.environmentId);
+    const targetProfile = profileId;
     const result = await connectSshEnvironment({
       target,
       label: "",
@@ -176,6 +208,7 @@ export function AddEnvironmentDialog({
       return;
     }
 
+    await assignNewEnvironment(result.value, known, targetProfile);
     handleOpenChange(false);
     toastManager.add({
       type: "success",
@@ -227,6 +260,8 @@ export function AddEnvironmentDialog({
       return;
     }
 
+    const known = savedEnvironments.map((e) => e.environmentId);
+    const targetProfile = profileId;
     const result = await connectPairing({
       ...remotePairingInput,
       ...(routeTarget ? { expectedEnvironmentId: routeTarget.environmentId } : {}),
@@ -248,6 +283,7 @@ export function AddEnvironmentDialog({
       return;
     }
 
+    await assignNewEnvironment(result.value, known, targetProfile);
     handleOpenChange(false);
     toastManager.add(
       routeTarget
@@ -634,6 +670,15 @@ export function AddEnvironmentDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
+          {profilesActive && !routeTarget ? (
+            <div className="mb-4">
+              <ProfileSelect
+                value={profileId}
+                onChange={setProfileId}
+                label="Default profile for the new environment"
+              />
+            </div>
+          ) : null}
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               {renderConnectionModeCard({

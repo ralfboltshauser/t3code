@@ -1,3 +1,10 @@
+import {
+  useProfileProjects,
+  useProfilesActive,
+  openProfileManager,
+  useSidebarProfiles,
+} from "../sidebarProfiles";
+import { SidebarProfileRail } from "./SidebarProfiles";
 import { attachSidebarTree } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -146,7 +153,6 @@ import {
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
   useDelegatedUnderParent,
-  useProjects,
   useServerConfigs,
   useQuietThreadShells,
 } from "../state/entities";
@@ -368,6 +374,7 @@ function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id
 }
 
 const NO_DRAGGED_ORDER: readonly string[] = [];
+const profileScrollPositions = new Map<string, number>();
 const NO_DRAGGED_ORDERS: {
   readonly settledOrder: readonly string[];
   readonly activeOrder: readonly string[] | undefined;
@@ -800,7 +807,7 @@ function isOptimisticDropReleased(input: {
 
 // Build maps in a hook so the compiler can prove they are frozen and cache them.
 function useSidebarLookups() {
-  const projects = useProjects();
+  const projects = useProfileProjects();
   const environments = useEnvironmentIdentities();
   const serverConfigs = useServerConfigs();
   const providerEntriesByEnvironment = useAtomValue(sidebarProviderEntriesAtom);
@@ -986,6 +993,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     },
   });
   const boringSidebarEnabled = useBoringSidebarEnabled();
+  const profilesActive = useProfilesActive();
   const legacySidebarEnabled = useClientSettings((settings) => settings.legacySidebarEnabled);
   const folderRowsMultiline = useClientSettings((settings) => settings.boringSidebarMultilineRows);
   const newThreadContext = useHandleNewThread();
@@ -1039,6 +1047,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const settlingThreadKeysRef = useRef(new Set<string>());
   const threadListRef = useRef<HTMLUListElement | null>(null);
   const sidebarContentRef = useRef<HTMLDivElement | null>(null);
+  const activeProfileId = useSidebarProfiles((state) => state.activeId);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- restores the native scroll viewport when the outer profile changes
+  useEffect(() => {
+    if (!profilesActive) return;
+    clearSelection();
+    const viewport = sidebarContentRef.current?.closest("[data-slot=scroll-area-viewport]");
+    if (!(viewport instanceof HTMLElement)) return;
+    viewport.scrollTop = profileScrollPositions.get(activeProfileId) ?? 0;
+    return () => {
+      profileScrollPositions.set(activeProfileId, viewport.scrollTop);
+    };
+  }, [activeProfileId, profilesActive, clearSelection]);
   const dragLabelOffsetRef = useRef(0);
   const listMotionRef = useRef<ReturnType<typeof createSidebarListMotion> | null>(null);
   const [dragState, setDragState] = useState<{
@@ -1096,7 +1116,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const threads = useQuietThreadShells();
+  const allThreads = useQuietThreadShells();
+  const profileProjectKeys = new Set(
+    projects.map((project) => `${project.environmentId}:${project.id}`),
+  );
+  const threads = profilesActive
+    ? allThreads.filter((thread) =>
+        profileProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+      )
+    : allThreads;
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -1175,12 +1203,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       projectScopeFilter.contains(item, query, (candidate) => candidate.label),
   });
   const scopedProjectGroups = revealWidensScope ? [] : chosenProjectGroups;
-  const scopedProjectRefs = scopedProjectGroups.flatMap((project) => project.memberProjectRefs);
-  const scopedProjectKeys = revealWidensScope ? null : chosenScopeProjectKeys;
+  const scopedProjectRefs = (
+    scopedProjectGroups.length ? scopedProjectGroups : profilesActive ? projectGroups : []
+  ).flatMap((project) => project.memberProjectRefs);
+  const scopedProjectKeys =
+    (revealWidensScope ? null : chosenScopeProjectKeys) ??
+    (profilesActive ? profileProjectKeys : null);
   const threadSearch = useThreadSearch(
-    connectedEnvironmentIds,
-    threadSearchQuery,
-    scopedProjectGroups.length === 0
+    profilesActive
+      ? connectedEnvironmentIds.filter((id) =>
+          scopedProjectRefs.some((project) => project.environmentId === id),
+        )
+      : connectedEnvironmentIds,
+    profilesActive && scopedProjectRefs.length === 0 ? "" : threadSearchQuery,
+    scopedProjectGroups.length === 0 && !profilesActive
       ? {}
       : { projectIds: scopedProjectRefs.map((projectRef) => projectRef.projectId) },
   );
@@ -1261,6 +1297,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       : { id: "pin", label: "Pin project", icon: "pin" },
                   ]
                 : []),
+              ...(profilesActive ? [{ id: "move-profile", label: "Move to profile…" }] : []),
               { id: "project-settings", label: "Project settings", icon: "settings" },
             ],
             position,
@@ -1277,6 +1314,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           case "pin":
           case "unpin":
             setProjectGroupPinned(group, clicked.value === "pin");
+            return;
+          case "move-profile":
+            openProfileManager(group.memberProjectRefs);
             return;
           case "project-settings":
             openProjectSettings(group);
@@ -1338,7 +1378,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         : scopedProjectGroups
       : null,
     keepEmptyFolders: (group) =>
-      scopedProjectGroups.length > 0 || (group.pinned && !group.archived),
+      scopedProjectGroups.length > 0 ||
+      (profilesActive && !group.archived) ||
+      (group.pinned && !group.archived),
   });
 
   // Ranked across environments as the palette ranks them, so one
@@ -3637,6 +3679,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
         </SidebarGroup>
       </SidebarContent>
+      <SidebarProfileRail />
       <SidebarChromeFooter />
     </>
   );

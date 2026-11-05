@@ -1,3 +1,4 @@
+import { useProfileProjects, sidebarProfilesActive, projectProfile } from "../sidebarProfiles";
 import {
   scopedProjectKey,
   scopeProjectRef,
@@ -26,7 +27,6 @@ import {
   readProjects,
   readThreadShell,
   readThreadShells,
-  useProjects,
   useQuietThreadShell,
 } from "../state/entities";
 import {
@@ -208,9 +208,12 @@ export function createNewThreadHandler(router: AnyRouter) {
           ) > 0,
       });
     };
-    const logicalProjectKey = project
+    const baseLogicalProjectKey = project
       ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
       : scopedProjectKey(projectRef);
+    const logicalProjectKey = sidebarProfilesActive()
+      ? `${projectProfile(projectRef)}:${baseLogicalProjectKey}`
+      : baseLogicalProjectKey;
     const hasBranchOption = options?.branch !== undefined;
     const hasWorktreePathOption = options?.worktreePath !== undefined;
     const hasEnvModeOption = options?.envMode !== undefined;
@@ -453,7 +456,7 @@ export function useHandleNewThread() {
         : useComposerDraftStore.getState().getDraftSession(routeTarget.draftId)
       : null,
   );
-  const projects = useProjects();
+  const projects = useProfileProjects();
   const handleNewThread = useNewThreadHandler();
   const defaultProjectRef = resolveDefaultProjectRef(projects, projectOrder);
 

@@ -1,3 +1,10 @@
+import { sidebarProfileForEnvironment } from "@t3tools/client-runtime/sidebar-profiles";
+import {
+  useProfileProjects,
+  useSidebarProfiles,
+  useProfilesActive,
+  projectProfile,
+} from "../sidebarProfiles";
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
@@ -12,7 +19,6 @@ import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
-import { useProjects } from "../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useClientSettings } from "./useSettings";
 
@@ -21,7 +27,9 @@ export function useLogicalProjectEnvironments(
   scratchDraft: boolean,
 ): readonly EnvironmentOption[] {
   const { environments } = useEnvironments();
-  const allProjects = useProjects();
+  const allProjects = useProfileProjects();
+  const profileDocument = useSidebarProfiles((s) => s.document);
+  const profilesActive = useProfilesActive();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
 
@@ -42,6 +50,15 @@ export function useLogicalProjectEnvironments(
   };
   if (scratchDraft) {
     for (const environment of environments) {
+      if (
+        profilesActive &&
+        sidebarProfileForEnvironment(profileDocument, environment.environmentId) !==
+          projectProfile({
+            environmentId: activeProject.environmentId,
+            projectId: activeProject.id,
+          })
+      )
+        continue;
       const scratchRoot = availableScratchWorkspaceRoot(
         environment.connection.phase,
         environment.serverConfig,
