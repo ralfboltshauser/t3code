@@ -94,6 +94,7 @@ vi.mock("../../state/workspace", () => ({
 }));
 vi.mock("../../state/vcs", () => ({ vcsEnvironment: { readRefs: {}, switchRef: {} } }));
 vi.mock("@react-navigation/native", () => ({
+  useIsFocused: () => true,
   CommonActions: { goBack: () => ({ type: "GO_BACK" }) },
   createNavigationContainerRef: () => ({ current: null }),
   // Main-comparison only, like the mocks above.

@@ -97,15 +97,22 @@ export function useMobileProfileProjects() {
   return projectsInSidebarProfile(projects, document, activeId);
 }
 
-export function useMobileProfileRoute(project: ScopedProjectRef | null) {
+export function useMobileProfileRoute(
+  project: ScopedProjectRef | null,
+  navigation: { key: string; focused: boolean },
+) {
+  const { key, focused } = navigation;
   const { document } = useMobileSidebarProfiles();
   const environmentId = project?.environmentId;
   const projectId = project?.projectId;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- explicit native navigation reveals the project’s owning profile
+  const owner =
+    document.enabled && environmentId && projectId
+      ? sidebarProfileForProject(document, { environmentId, projectId })
+      : null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- route identity or ownership changes reveal its profile without following background preference refreshes
   useEffect(() => {
-    if (document.enabled && environmentId && projectId)
-      selectMobileSidebarProfile(sidebarProfileForProject(document, { environmentId, projectId }));
-  }, [document, environmentId, projectId]);
+    if (owner && environmentId && projectId && key && focused) selectMobileSidebarProfile(owner);
+  }, [owner, environmentId, projectId, key, focused]);
 }
 
 export async function assignMobileNewEnvironment(

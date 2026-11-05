@@ -53,7 +53,7 @@ Owning modules are `packages/client-runtime/src/sidebarProfiles.ts`, web
 Verify precedence, reversible moves, concurrent durable writes, and UI scoping:
 
 ```sh
-vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src/settings/DesktopSidebarProfiles.test.ts apps/web/src/sidebarProfilesStorage.browser.test.ts apps/web/src/components/SidebarProfiles.browser.test.tsx
+vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src/settings/DesktopSidebarProfiles.test.ts apps/web/src/sidebarProfilesStorage.browser.test.ts apps/web/src/components/SidebarProfiles.browser.test.tsx apps/mobile/src/state/sidebar-profiles.test.tsx
 ```
 
 The fork also maintains project-local skills and coordinated deployment tooling
