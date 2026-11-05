@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createWorkspaceFocusController } from "./workspaceFocus";
+import { createWorkspaceFocusController, workspaceAreaProps } from "./workspaceFocus";
 
 function setup() {
   const root = document.createElement("div");
   document.body.append(root);
   const controller = createWorkspaceFocusController(document);
-  const area = (name: string, order: number, parent: HTMLElement = root) => {
+  const area = (name: string, order: number, parent: HTMLElement = root, standalone = true) => {
     const element = document.createElement("section");
-    element.dataset.workspaceArea = name;
-    element.dataset.workspaceOrder = String(order);
-    element.tabIndex = -1;
+    for (const [key, value] of Object.entries(workspaceAreaProps(name, order, name, standalone))) {
+      element.setAttribute(key === "tabIndex" ? "tabindex" : key, String(value));
+    }
     const button = document.createElement("button");
     button.textContent = name;
     element.append(button);
@@ -20,9 +20,28 @@ function setup() {
     root.insertAdjacentHTML("beforeend", html);
     return root.lastElementChild as HTMLElement;
   };
+  const sideChat = (panel: HTMLElement) => {
+    const surface = document.createElement("div");
+    surface.dataset.rightPanelSurfaceContent = "";
+    surface.innerHTML =
+      '<div data-side-chat-pane><button aria-disabled="true">Bring back</button></div>';
+    panel.append(surface);
+    const pane = surface.firstElementChild as HTMLElement;
+    const conversation = area("conversation", 1, pane, false);
+    const composer = area("composer", 2, pane, false);
+    composer.button.setAttribute("aria-label", "Attach files");
+    const editor = document.createElement("div");
+    editor.contentEditable = "true";
+    editor.setAttribute("role", "textbox");
+    editor.setAttribute("aria-label", "Message Side chat");
+    editor.innerHTML = "<p><br></p>";
+    composer.element.prepend(editor);
+    return { surface, editor, composer, conversation };
+  };
   return {
     area,
     append,
+    sideChat,
     controller,
     [Symbol.dispose]() {
       controller.dispose();
@@ -32,6 +51,80 @@ function setup() {
 }
 
 describe("workspace area focus", () => {
+  it("focuses a side chat's composer instead of its Bring back toolbar", () => {
+    using fixture = setup();
+    const mainComposer = fixture.area("composer", 2);
+    const panel = fixture.area("panel", 3);
+    const side = fixture.sideChat(panel.element);
+    mainComposer.button.focus();
+
+    expect(fixture.controller.focus("panel")).toBe(true);
+    expect(document.activeElement).toBe(side.editor);
+
+    panel.element.hidden = true;
+    expect(fixture.controller.focus("content")).toBe(true);
+    expect(document.activeElement).toBe(mainComposer.button);
+    panel.element.hidden = false;
+    expect(fixture.controller.focus("panel")).toBe(true);
+    expect(document.activeElement).toBe(side.editor);
+  });
+
+  it("cycles through a side-chat panel once, in both directions", () => {
+    using fixture = setup();
+    fixture.area("sidebar", 0);
+    fixture.area("conversation", 1);
+    const mainComposer = fixture.area("composer", 2);
+    const details = fixture.area("details", 3);
+    const panel = fixture.area("panel", 4);
+    const terminal = fixture.area("terminal", 5);
+    const side = fixture.sideChat(panel.element);
+    mainComposer.button.focus();
+
+    fixture.controller.move(1);
+    expect(document.activeElement).toBe(details.button);
+    fixture.controller.move(1);
+    expect(document.activeElement).toBe(side.editor);
+    fixture.controller.move(1);
+    expect(document.activeElement).toBe(terminal.button);
+    fixture.controller.move(-1);
+    expect(document.activeElement).toBe(side.editor);
+    fixture.controller.move(-1);
+    expect(document.activeElement).toBe(details.button);
+    fixture.controller.move(-1);
+    expect(document.activeElement).toBe(mainComposer.button);
+  });
+
+  it("keeps focus history separate for the main composer and each side-chat tab", () => {
+    using fixture = setup();
+    const mainComposer = fixture.area("composer", 2);
+    mainComposer.element.insertAdjacentHTML(
+      "afterbegin",
+      '<div contenteditable="true">Draft</div>',
+    );
+    mainComposer.button.setAttribute("aria-label", "Attach files");
+    const panel = fixture.area("panel", 4);
+    panel.element.dataset.workspaceFocusKey = "panel:side-a";
+    const sideA = fixture.sideChat(panel.element);
+    mainComposer.button.focus();
+    fixture.controller.focus("panel");
+    expect(document.activeElement).toBe(sideA.editor);
+    sideA.composer.button.focus();
+    fixture.controller.focus("content");
+    expect(document.activeElement).toBe(mainComposer.button);
+
+    sideA.surface.remove();
+    panel.element.dataset.workspaceFocusKey = "panel:side-b";
+    const sideB = fixture.sideChat(panel.element);
+    fixture.controller.focus("panel");
+    expect(document.activeElement).toBe(sideB.editor);
+
+    sideB.surface.remove();
+    panel.element.dataset.workspaceFocusKey = "panel:side-a";
+    panel.element.append(sideA.surface);
+    fixture.controller.focus("panel");
+    expect(document.activeElement).toBe(sideA.composer.button);
+  });
+
   it("cycles in workspace order in both directions, independent of DOM order", () => {
     using fixture = setup();
     const panel = fixture.area("panel", 3);
@@ -186,25 +279,40 @@ describe("workspace area focus", () => {
     expect(rect.bottom > box.top && rect.top < box.bottom).toBe(true);
   });
 
-  it("does not scroll the conversation to an old control", () => {
-    using fixture = setup();
-    const conversation = fixture.area("conversation", 1);
-    const timeline = document.createElement("div");
-    timeline.style.cssText = "height: 50px; overflow-y: auto";
-    const copy = document.createElement("button");
-    copy.textContent = "Copy";
-    timeline.append(copy, Object.assign(document.createElement("div"), { style: "height: 400px" }));
-    conversation.element.append(timeline);
-    const composer = fixture.area("composer", 2);
-    copy.focus();
-    fixture.controller.move(1);
-    expect(document.activeElement).toBe(composer.button);
-    // Live follow moved the timeline to the newest output.
-    timeline.scrollTop = 300;
-    fixture.controller.move(-1);
-    expect(document.activeElement).toBe(conversation.element);
-    expect(timeline.scrollTop).toBe(300);
-  });
+  it.each([
+    { embedded: false, remount: false },
+    { embedded: true, remount: false },
+    { embedded: true, remount: true },
+  ])(
+    "does not scroll the conversation to an old control (embedded: $embedded, remount: $remount)",
+    ({ embedded, remount }) => {
+      using fixture = setup();
+      const side = embedded ? fixture.sideChat(fixture.area("panel", 4).element) : null;
+      const conversation = side?.conversation ?? fixture.area("conversation", 1);
+      const timeline = document.createElement("div");
+      timeline.style.cssText = "height: 50px; overflow-y: auto";
+      const copy = document.createElement("button");
+      copy.textContent = "Copy";
+      timeline.append(
+        copy,
+        Object.assign(document.createElement("div"), { style: "height: 400px" }),
+      );
+      conversation.element.append(timeline);
+      const composer = fixture.area("composer", 2);
+      copy.focus();
+      fixture.controller.move(1);
+      expect(document.activeElement).toBe(composer.button);
+      fixture.controller.move(-1);
+      expect(document.activeElement).toBe(copy);
+      fixture.controller.move(1);
+      // Live follow moved the timeline to the newest output.
+      timeline.scrollTop = 300;
+      if (remount) copy.replaceWith(copy.cloneNode(true));
+      fixture.controller.move(-1);
+      expect(timeline.scrollTop).toBe(300);
+      expect(document.activeElement).toBe(side?.editor ?? conversation.element);
+    },
+  );
 
   it("returns focus to the area when its focused control disappears", async () => {
     using fixture = setup();
@@ -249,13 +357,18 @@ describe("workspace area focus", () => {
     expect(document.activeElement).toBe(clickedRow);
   });
 
-  it("waits for a requested area to mount", async () => {
-    using fixture = setup();
-    fixture.area("composer", 2);
-    fixture.controller.request({ area: "pull-requests" });
-    const list = fixture.area("pull-requests", 1);
-    await vi.waitFor(() => expect(document.activeElement).toBe(list.button));
-  });
+  it.each(["pull-requests", "panel"])(
+    "waits for the requested %s content to mount",
+    async (name) => {
+      using fixture = setup();
+      fixture.area("composer", 2);
+      fixture.controller.request({ area: name });
+      const destination = fixture.area(name, 1);
+      const target =
+        name === "panel" ? fixture.sideChat(destination.element).editor : destination.button;
+      await vi.waitFor(() => expect(document.activeElement).toBe(target));
+    },
+  );
 
   it("keeps focus on a control that React remounted elsewhere", async () => {
     using fixture = setup();
