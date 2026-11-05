@@ -11,6 +11,7 @@ const FOCUSABLE_SELECTOR =
 /** A region and, when standalone, an F6 stop; embedded regions share their host's focus history. */
 export function workspaceAreaProps(name: string, order: number, label: string, standalone = true) {
   return {
+    "data-workspace-region": name,
     ...(standalone ? { "data-workspace-area": name, "data-workspace-order": order } : {}),
     "aria-label": label,
     role: "region",
@@ -72,6 +73,14 @@ function isInScrollView(target: HTMLElement) {
   });
 }
 
+function isConversationControl(element: HTMLElement) {
+  return (
+    element.closest(
+      '[data-workspace-region="conversation"], [data-workspace-area="conversation"]',
+    ) !== null
+  );
+}
+
 /**
  * Brings a restored control into view, innermost scrolling list first.
  * scrollIntoView would also scroll overflow-hidden layout containers out of place.
@@ -126,6 +135,7 @@ export function createWorkspaceFocusController(doc: Document) {
         ? Array.from(area.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).find(
             (element) =>
               belongs(element) &&
+              (!isConversationControl(element) || isInScrollView(element)) &&
               element.tagName === previous.tagName &&
               ((previous.id && element.id === previous.id) ||
                 (previous.getAttribute("aria-label") &&
@@ -145,7 +155,9 @@ export function createWorkspaceFocusController(doc: Document) {
     // so the conversation reuses a control only while it is still in view.
     const isConversation = area.dataset.workspaceArea === "conversation";
     const targets = new Set([
-      previous && belongs(previous) && (!isConversation || isInScrollView(previous))
+      previous &&
+      belongs(previous) &&
+      (!isConversationControl(previous) || isInScrollView(previous))
         ? previous
         : undefined,
       isConversation ? undefined : restored,
@@ -160,7 +172,7 @@ export function createWorkspaceFocusController(doc: Document) {
       const root = target.getRootNode();
       const active = root instanceof ShadowRoot ? root.activeElement : doc.activeElement;
       if (active === target || (active && target.contains(active))) {
-        if (target !== area && !isConversation) revealInScrollers(target);
+        if (target !== area && !isConversationControl(target)) revealInScrollers(target);
         return true;
       }
     }

@@ -27,7 +27,7 @@ function setup() {
       '<div data-side-chat-pane><button aria-disabled="true">Bring back</button></div>';
     panel.append(surface);
     const pane = surface.firstElementChild as HTMLElement;
-    area("conversation", 1, pane, false);
+    const conversation = area("conversation", 1, pane, false);
     const composer = area("composer", 2, pane, false);
     composer.button.setAttribute("aria-label", "Attach files");
     const editor = document.createElement("div");
@@ -36,7 +36,7 @@ function setup() {
     editor.setAttribute("aria-label", "Message Side chat");
     editor.innerHTML = "<p><br></p>";
     composer.element.prepend(editor);
-    return { surface, editor, composer };
+    return { surface, editor, composer, conversation };
   };
   return {
     area,
@@ -279,25 +279,40 @@ describe("workspace area focus", () => {
     expect(rect.bottom > box.top && rect.top < box.bottom).toBe(true);
   });
 
-  it("does not scroll the conversation to an old control", () => {
-    using fixture = setup();
-    const conversation = fixture.area("conversation", 1);
-    const timeline = document.createElement("div");
-    timeline.style.cssText = "height: 50px; overflow-y: auto";
-    const copy = document.createElement("button");
-    copy.textContent = "Copy";
-    timeline.append(copy, Object.assign(document.createElement("div"), { style: "height: 400px" }));
-    conversation.element.append(timeline);
-    const composer = fixture.area("composer", 2);
-    copy.focus();
-    fixture.controller.move(1);
-    expect(document.activeElement).toBe(composer.button);
-    // Live follow moved the timeline to the newest output.
-    timeline.scrollTop = 300;
-    fixture.controller.move(-1);
-    expect(document.activeElement).toBe(conversation.element);
-    expect(timeline.scrollTop).toBe(300);
-  });
+  it.each([
+    { embedded: false, remount: false },
+    { embedded: true, remount: false },
+    { embedded: true, remount: true },
+  ])(
+    "does not scroll the conversation to an old control (embedded: $embedded, remount: $remount)",
+    ({ embedded, remount }) => {
+      using fixture = setup();
+      const side = embedded ? fixture.sideChat(fixture.area("panel", 4).element) : null;
+      const conversation = side?.conversation ?? fixture.area("conversation", 1);
+      const timeline = document.createElement("div");
+      timeline.style.cssText = "height: 50px; overflow-y: auto";
+      const copy = document.createElement("button");
+      copy.textContent = "Copy";
+      timeline.append(
+        copy,
+        Object.assign(document.createElement("div"), { style: "height: 400px" }),
+      );
+      conversation.element.append(timeline);
+      const composer = fixture.area("composer", 2);
+      copy.focus();
+      fixture.controller.move(1);
+      expect(document.activeElement).toBe(composer.button);
+      fixture.controller.move(-1);
+      expect(document.activeElement).toBe(copy);
+      fixture.controller.move(1);
+      // Live follow moved the timeline to the newest output.
+      timeline.scrollTop = 300;
+      if (remount) copy.replaceWith(copy.cloneNode(true));
+      fixture.controller.move(-1);
+      expect(timeline.scrollTop).toBe(300);
+      expect(document.activeElement).toBe(side?.editor ?? conversation.element);
+    },
+  );
 
   it("returns focus to the area when its focused control disappears", async () => {
     using fixture = setup();

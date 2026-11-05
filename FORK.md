@@ -18,7 +18,8 @@ Use `.agents/skills/t3-fork-feature/SKILL.md` for feature work and
 Embedded side chats share their host panel's F6 stop and per-tab focus history.
 Their conversation and composer remain labelled regions, without registering
 duplicate workspace areas. This lets the existing panel focus rules select the
-input on first open and restore the last used control when returning. Preserve
+input on first open and restore the last used control when returning, while
+preserving scroll position when an old message control has left view. Preserve
 the `embedded` handling in `apps/web/src/components/ChatView.tsx` and the region
 props in `apps/web/src/lib/workspaceFocus.ts` when upstream changes panel focus.
 Verify opening/reopening, bidirectional F6 navigation and isolated focus history with
