@@ -78,6 +78,11 @@ Run the required `check:changed` against the pinned personal baseline and the
 candidate's customization checks. Inspect the final diff for incidental changes.
 Record any unverified behavior instead of calling it tested.
 
+Before delivery, review the fork delta from the merge base with `upstream/main`.
+Account separately for upstream-owned production files and new fork-only tooling.
+Inspect every production edit for avoidable churn; maintenance features should
+not require changes to application internals. Explain any necessary core edit.
+
 ## Leave a maintainable feature and deliver it
 
 Update the candidate's `FORK.md` intentional-differences section with:

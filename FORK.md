@@ -41,3 +41,7 @@ integration, weekly decisions and all-host deployment. `.t3-fork/` is ignored
 installation-local configuration and runtime state, not product source.
 The old Ubuntu sync timer is superseded; `scripts/personal-sync.sh` is a guard
 that refuses to run the obsolete nested-agent workflow.
+
+Claude Code uses Claude.ai subscription authentication only. Before launching it,
+use the installed `claude-subscription-only` skill and its guarded launcher;
+API/gateway/cloud-provider billing credentials are prohibited.
