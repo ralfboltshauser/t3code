@@ -46,6 +46,8 @@ IndexedDB, and mobile uses serialized preference transforms. Switching retains
 drafts and running work; disabling retains assignments. Preserve filtering in
 sidebar groups, search, new-thread defaults, and native project selection, and
 preserve profile intent across asynchronous project creation and pairing.
+The index route waits for both profile and client settings hydration before
+starting any automatic draft, so reload cannot replace a saved profile.
 
 Owning modules are `packages/client-runtime/src/sidebarProfiles.ts`, web
 `sidebarProfiles.ts` and `SidebarProfiles.tsx`, desktop
@@ -53,7 +55,7 @@ Owning modules are `packages/client-runtime/src/sidebarProfiles.ts`, web
 Verify precedence, reversible moves, concurrent durable writes, and UI scoping:
 
 ```sh
-vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src/settings/DesktopSidebarProfiles.test.ts apps/web/src/sidebarProfilesStorage.browser.test.ts apps/web/src/components/SidebarProfiles.browser.test.tsx apps/mobile/src/state/sidebar-profiles.test.tsx
+vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src/settings/DesktopSidebarProfiles.test.ts apps/web/src/sidebarProfilesStorage.browser.test.ts apps/web/src/components/SidebarProfiles.browser.test.tsx apps/mobile/src/state/sidebar-profiles.test.tsx apps/web/src/components/SidebarProfiles.startup.browser.test.tsx
 ```
 
 The fork also maintains project-local skills and coordinated deployment tooling
