@@ -32,6 +32,34 @@ function setup() {
 }
 
 describe("workspace area focus", () => {
+  it("focuses a side chat's composer instead of its Bring back toolbar", () => {
+    using fixture = setup();
+    const mainComposer = fixture.area("composer", 2);
+    const panel = fixture.area("panel", 3);
+    panel.element.insertAdjacentHTML(
+      "beforeend",
+      `<div data-right-panel-surface-content>
+        <div data-side-chat-pane>
+          <button aria-disabled="true">Bring back</button>
+          <section data-workspace-area="composer">
+            <div contenteditable="true" role="textbox" aria-label="Message Side chat"><p><br></p></div>
+          </section>
+        </div>
+      </div>`,
+    );
+    mainComposer.button.focus();
+
+    expect(fixture.controller.focus("panel")).toBe(true);
+    expect(document.activeElement).toBe(panel.element.querySelector('[role="textbox"]'));
+
+    panel.element.hidden = true;
+    expect(fixture.controller.focus("content")).toBe(true);
+    expect(document.activeElement).toBe(mainComposer.button);
+    panel.element.hidden = false;
+    expect(fixture.controller.focus("panel")).toBe(true);
+    expect(document.activeElement).toBe(panel.element.querySelector('[role="textbox"]'));
+  });
+
   it("cycles in workspace order in both directions, independent of DOM order", () => {
     using fixture = setup();
     const panel = fixture.area("panel", 3);

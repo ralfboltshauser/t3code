@@ -15,6 +15,13 @@ Use `.agents/skills/t3-fork-feature/SKILL.md` for feature work and
 
 ## Intentional differences
 
+Opening or returning to a side chat focuses its composer instead of the Bring
+back toolbar. The workspace focus controller in
+`apps/web/src/lib/workspaceFocus.ts` resolves a side-chat panel to its nested
+composer area; preserve that handoff when upstream changes panel focus.
+Verify initial focus and closing/reopening the panel with
+`vp test run apps/web/src/lib/workspaceFocus.browser.test.ts`.
+
 Side chats inherit their parent's permission mode when created, including their
 first turn, so starting a side conversation preserves the access already chosen
 for that work. The side chat's mode can then be changed independently. Keep this

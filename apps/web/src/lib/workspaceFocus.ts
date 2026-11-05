@@ -105,7 +105,14 @@ export function createWorkspaceFocusController(doc: Document) {
   };
   doc.addEventListener("focusin", remember);
 
-  const focusArea = (area: HTMLElement, restore = true) => {
+  const focusArea = (requestedArea: HTMLElement, restore = true) => {
+    const sideChatComposer = requestedArea.querySelector<HTMLElement>(
+      '[data-side-chat-pane] [data-workspace-area="composer"]',
+    );
+    const area =
+      sideChatComposer && isWorkspaceElementVisible(sideChatComposer)
+        ? sideChatComposer
+        : requestedArea;
     const key = area.dataset.workspaceFocusKey ?? area.dataset.workspaceArea!;
     const previous = restore ? lastFocused.get(key) : undefined;
     const belongs = (element: HTMLElement) =>
