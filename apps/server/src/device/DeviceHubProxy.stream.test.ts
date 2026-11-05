@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest";
-import { NodeWS } from "@effect/platform-node/NodeSocket";
+import * as NodeWS from "@effect/platform-node/NodeWS";
 import * as NodeNet from "node:net";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -99,7 +99,11 @@ it.live("closes an upstream socket that is still connecting without an unhandled
       Effect.promise(
         () =>
           new Promise<NodeNet.Server>((resolve) => {
-            const server = NodeNet.createServer((socket) => dialed.resolve(socket));
+            const server = NodeNet.createServer((socket) => {
+              // Drain the unanswered handshake so the peer's EOF reaches the close listener.
+              socket.resume();
+              dialed.resolve(socket);
+            });
             server.listen(0, "127.0.0.1", () => resolve(server));
           }),
       ),

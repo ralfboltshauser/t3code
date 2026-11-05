@@ -65,7 +65,12 @@ more than ten minutes late are skipped, not caught up later.
    `.t3-fork/state/decisions.md`. Retain the candidate and defer product questions
    to the weekly review. Routine infrastructure failures may be repaired directly.
 6. Run applicable customization checks and `vp run check:changed` against the
-   pinned personal base. Follow source testing rules; CI owns repo-wide suites.
+   pinned personal base. On macOS, set `GIT_CONFIG_GLOBAL=/dev/null` and use a
+   short `TMPDIR` on a case-sensitive scratch volume outside any repository:
+   Linux fixtures need case-only filenames, executable fixtures must not inherit
+   the repo's module type, and packaging probes reject ancestor `node_modules`.
+   Allow a longer batch `--timeout` for large integrations; per-test limits stay
+   unchanged. Follow source testing rules; CI owns repo-wide suites.
    Commit checked repairs/merge, verify both parents are ancestors and the tree
    is clean, then normally push to `personal`. Reconcile concurrent advances;
    force pushes are outside this workflow.
