@@ -1,0 +1,3 @@
+interface:
+  display_name: "T3 Fork Upstream"
+  short_description: "Merge upstream while preserving personal behavior"

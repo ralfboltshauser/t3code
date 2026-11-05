@@ -1,0 +1,5 @@
+{
+  "signing_identity": "Developer ID Application: Your Name (TEAMID)",
+  "bundle_id": "com.example.t3code.personal",
+  "worker_label": "com.example.t3code-fork-deploy"
+}

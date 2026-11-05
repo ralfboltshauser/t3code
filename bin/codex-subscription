@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+unset OPENAI_API_KEY CODEX_API_KEY OPENAI_BASE_URL
+binary="${T3_FORK_CODEX_BINARY:-$HOME/.local/bin/codex}"
+status="$($binary login status 2>&1)" || { echo 'ChatGPT subscription login required; refusing API authentication.' >&2; exit 64; }
+case "$status" in *'Logged in using ChatGPT'*) ;; *) echo 'ChatGPT subscription login required; refusing API authentication.' >&2; exit 64;; esac
+exec "$binary" "$@"

@@ -1,8 +1,17 @@
 # T3 Code
 
-For personal features or upstream merges in `ralfboltshauser/t3code`, read
-`FORK.md` and `.agents/skills/t3-personal-fork/SKILL.md` first. Keep product
-customizations on `personal`; `main` remains an upstream mirror.
+For personal features, read `FORK.md` and
+`.agents/skills/t3-fork-feature/SKILL.md`. For upstream integration, use
+`.agents/skills/t3-fork-upstream/SKILL.md`; for builds, publication or deployment,
+use `.agents/skills/t3-fork-release/SKILL.md`. Operational policy lives in
+`docs/operations/personal-fork.md`. Keep customizations and tooling on `personal`;
+`main` remains an upstream mirror. Local host inventory and runtime state live
+in ignored `.t3-fork/`, shared through the canonical checkout across worktrees.
+Preserve unfinished work and reason from current source and observed host state.
+
+Claude Code must use Claude.ai subscription authentication. Before launching it,
+use the installed `claude-subscription-only` skill and its mandated guarded
+launcher; API/gateway/cloud-provider billing credentials are prohibited.
 
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity) and serves web, desktop, and mobile clients.
 

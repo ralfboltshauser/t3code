@@ -1,0 +1,30 @@
+{
+  "timezone": "Europe/Zurich",
+  "origin": "https://github.com/ralfboltshauser/t3code.git",
+  "upstream": "https://github.com/pingdotgg/t3code.git",
+  "branch": "personal",
+  "hosts": [
+    {
+      "id": "mac",
+      "transport": "local",
+      "platform": "mac",
+      "arch": "arm64",
+      "app": "/Applications/T3 Code (Personal).app",
+      "home": "/Users/you/.local/share/t3code-fork",
+      "health_url": "http://127.0.0.1:3773/.well-known/t3/environment",
+      "installed_record": "/path/to/your/checkout/.t3-fork/state/installed-commit"
+    },
+    {
+      "id": "remote-linux",
+      "transport": "ssh",
+      "ssh": "you@remote-host",
+      "platform": "linux",
+      "arch": "x64",
+      "repo": "/home/you/src/t3code",
+      "install_root": "/home/you/.local/share/t3code-fork",
+      "home": "/home/you/.local/share/t3code-fork/data",
+      "service": "t3code-personal.service",
+      "health_url": "http://127.0.0.1:3773/.well-known/t3/environment"
+    }
+  ]
+}
