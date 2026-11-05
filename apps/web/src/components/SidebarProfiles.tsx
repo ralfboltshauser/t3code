@@ -1,4 +1,14 @@
-import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
+import { ChevronsUpDownIcon, LayersIcon, Settings2Icon } from "lucide-react";
+import {
+  Menu,
+  MenuTrigger,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRadioItemIndicator,
+  MenuSeparator,
+  MenuItem,
+} from "./ui/menu";
 import { randomUUID } from "../lib/utils";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -29,7 +39,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "./ui/select";
-import { SidebarInset } from "./ui/sidebar";
+import { SidebarInset, SidebarMenuButton } from "./ui/sidebar";
 
 const colors: Record<SidebarProfile["color"], string> = {
   slate: "bg-slate-400",
@@ -84,60 +94,57 @@ export function SidebarProfileRail() {
   const activeId = useSidebarProfiles((s) => s.activeId);
   const error = useSidebarProfiles((s) => s.error);
   const switchProfile = useSwitchSidebarProfile();
+  const profile = document.profiles.find((p) => p.id === activeId);
+  const name = profile?.name ?? "All profiles";
   if (!active) return null;
   return (
-    <div className="border-t border-sidebar-border px-2 py-2">
-      <div className="mb-1 flex items-center justify-between px-1 text-xs text-sidebar-muted-foreground">
-        <span>{document.profiles.find((p) => p.id === activeId)?.name ?? "All profiles"}</span>
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={() => openProfileManager()}
-          aria-label="Manage sidebar profiles"
-        >
-          Manage
-        </Button>
-      </div>
-      <div className="flex gap-1 overflow-x-auto" role="group" aria-label="Sidebar profiles">
-        {document.profiles.map((p) => (
-          <Tooltip key={p.id}>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  aria-label={`Switch to ${p.name}`}
-                  aria-pressed={activeId === p.id}
-                  onClick={() => void switchProfile(p.id)}
-                  className={`flex min-h-9 min-w-9 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-sm hover:bg-sidebar-row-hover focus-visible:outline-2 focus-visible:outline-ring ${activeId === p.id ? "bg-sidebar-row-hover text-sidebar-foreground" : "text-sidebar-muted-foreground"}`}
-                />
-              }
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${colors[p.color]}`} aria-hidden />
-              {p.icon}
-            </TooltipTrigger>
-            <TooltipPopup side="top">{p.name}</TooltipPopup>
-          </Tooltip>
-        ))}
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Show all profiles"
-          aria-pressed={activeId === ALL_PROFILES_ID}
-          onClick={() => void switchProfile(ALL_PROFILES_ID)}
-        >
-          All
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Create profile"
-          onClick={() => openProfileManager()}
-        >
-          +
-        </Button>
-      </div>
+    <div className="px-2 pt-1 pb-1">
+      <Menu>
+        <MenuTrigger render={<SidebarMenuButton aria-label={`Switch profile: ${name}`} />}>
+          {profile ? (
+            <span aria-hidden className="flex size-4 shrink-0 items-center justify-center text-sm">
+              {profile.icon}
+            </span>
+          ) : (
+            <LayersIcon aria-hidden />
+          )}
+          <span className="min-w-0 flex-1 truncate">{name}</span>
+          <ChevronsUpDownIcon
+            aria-hidden
+            className="ml-auto size-3.5 shrink-0 text-sidebar-muted-foreground"
+          />
+        </MenuTrigger>
+        <MenuPopup side="top" align="start" className="w-(--anchor-width)">
+          <MenuRadioGroup value={activeId} onValueChange={(id) => void switchProfile(id)}>
+            {document.profiles.map((p) => (
+              <MenuRadioItem key={p.id} value={p.id} closeOnClick>
+                <span className="flex min-w-0 items-center gap-2">
+                  <span aria-hidden className="flex size-4 shrink-0 items-center justify-center">
+                    {p.icon}
+                  </span>
+                  <span className="truncate">{p.name}</span>
+                </span>
+                <MenuRadioItemIndicator />
+              </MenuRadioItem>
+            ))}
+            <MenuSeparator />
+            <MenuRadioItem value={ALL_PROFILES_ID} closeOnClick>
+              <span className="flex items-center gap-2">
+                <LayersIcon aria-hidden />
+                All profiles
+              </span>
+              <MenuRadioItemIndicator />
+            </MenuRadioItem>
+          </MenuRadioGroup>
+          <MenuSeparator />
+          <MenuItem onClick={() => openProfileManager()}>
+            <Settings2Icon aria-hidden />
+            Manage profiles…
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
       {error ? (
-        <p role="alert" className="mt-2 text-xs text-destructive">
+        <p role="alert" className="px-2 pt-1 text-xs text-destructive">
           {error}
         </p>
       ) : null}

@@ -4,15 +4,11 @@ import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/cont
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 import { render, act } from "../../test/render";
-import {
-  useSidebarProfiles,
-  openProfileManager,
-  projectProfile,
-  selectSidebarProfile,
-} from "../sidebarProfiles";
+import { useSidebarProfiles, openProfileManager, projectProfile } from "../sidebarProfiles";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
 import { useProjects } from "../state/entities";
-import { SidebarProfileManager } from "./SidebarProfiles";
+import { SidebarProvider } from "./ui/sidebar";
+import { SidebarProfileManager, SidebarProfileRail } from "./SidebarProfiles";
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 
 vi.mock("../state/entities", { spy: true });
@@ -75,10 +71,11 @@ describe("sidebar profile integration", () => {
   it("moves a physical project out of its former sidebar and exposes it in its destination", async () => {
     using _setup = await setup();
     await using screen = await render(
-      <>
+      <SidebarProvider>
         <Groups />
+        <SidebarProfileRail />
         <SidebarProfileManager />
-      </>,
+      </SidebarProvider>,
     );
     await expect.element(screen.getByText("Work repository")).toBeVisible();
     await act(() => openProfileManager([{ environmentId, projectId }]));
@@ -88,7 +85,16 @@ describe("sidebar profile integration", () => {
     await vi.waitFor(() => expect(projectProfile({ environmentId, projectId })).toBe("work"));
     await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect.element(screen.getByText("Work repository")).not.toBeInTheDocument();
-    await act(() => selectSidebarProfile("work"));
+    await screen.getByRole("button", { name: "Switch profile: General", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Work", exact: true }).click();
     await expect.element(screen.getByText("Work repository")).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Switch profile: Work", exact: true }))
+      .toBeVisible();
+    await screen.getByRole("button", { name: "Switch profile: Work", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "All profiles", exact: true }).click();
+    await expect
+      .element(screen.getByRole("button", { name: "Switch profile: All profiles", exact: true }))
+      .toBeVisible();
   });
 });
