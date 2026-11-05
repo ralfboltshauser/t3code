@@ -39,3 +39,4 @@ path.write_bytes(plistlib.dumps(value))
 PY
 codesign --force --deep --timestamp=none --sign "$identity" "$app"
 codesign --verify --deep --strict "$app"
+git show "$commit:pnpm-lock.yaml" > pnpm-lock.yaml

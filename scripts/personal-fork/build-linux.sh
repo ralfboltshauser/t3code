@@ -14,6 +14,9 @@ git -C "$repo" fetch origin personal
 if ! test -d "$build"; then
   git clone --shared --no-checkout "$repo" "$build"
   git -C "$build" remote set-url origin "$origin"
+  # Shared clones may borrow a partial object store; allow checkout to fetch missing blobs.
+  git -C "$build" config remote.origin.promisor true
+  git -C "$build" config remote.origin.partialclonefilter blob:none
   git -C "$build" checkout --detach "$commit"
 fi
 cd "$build"

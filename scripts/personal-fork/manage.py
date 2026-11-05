@@ -112,6 +112,9 @@ def stage(commit):
             build.parent.mkdir(exist_ok=True)
             run("git", "clone", "--shared", "--no-checkout", str(repo), str(build), capture=False)
             run("git", "-C", str(build), "remote", "set-url", "origin", config["origin"])
+            # Shared clones may borrow a partial object store; allow checkout to fetch missing blobs.
+            run("git", "-C", str(build), "config", "remote.origin.promisor", "true")
+            run("git", "-C", str(build), "config", "remote.origin.partialclonefilter", "blob:none")
             run("git", "-C", str(build), "checkout", "--detach", commit, capture=False)
         if run("git", "-C", str(build), "rev-parse", "HEAD") != commit or run("git", "-C", str(build), "status", "--porcelain"):
             raise RuntimeError("Build checkout has changes or the wrong revision; preserve and inspect it")
