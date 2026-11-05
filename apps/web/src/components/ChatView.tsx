@@ -708,8 +708,8 @@ export default function ChatView(props: ChatViewProps) {
     setPendingServerThreadStartFromOriginByThreadId,
   ] = useState<Record<string, boolean>>({});
   const legendListRef = useRef<LegendListRef | null>(null);
-  const conversationArea = workspaceAreaProps("conversation", 1, "Conversation");
-  const composerArea = workspaceAreaProps("composer", 2, "Message input");
+  const conversationArea = workspaceAreaProps("conversation", 1, "Conversation", !embedded);
+  const composerArea = workspaceAreaProps("composer", 2, "Message input", !embedded);
   const [composerOverlayElement, setComposerOverlayElement] = useState<HTMLDivElement | null>(null);
   const [composerTimelineInset, setComposerTimelineInset] = useState(0);
   const composerTimelineInsetRef = useRef(0);

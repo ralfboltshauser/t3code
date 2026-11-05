@@ -15,11 +15,13 @@ Use `.agents/skills/t3-fork-feature/SKILL.md` for feature work and
 
 ## Intentional differences
 
-Opening or returning to a side chat focuses its composer instead of the Bring
-back toolbar. The workspace focus controller in
-`apps/web/src/lib/workspaceFocus.ts` resolves a side-chat panel to its nested
-composer area; preserve that handoff when upstream changes panel focus.
-Verify initial focus and closing/reopening the panel with
+Embedded side chats share their host panel's F6 stop and per-tab focus history.
+Their conversation and composer remain labelled regions, without registering
+duplicate workspace areas. This lets the existing panel focus rules select the
+input on first open and restore the last used control when returning. Preserve
+the `embedded` handling in `apps/web/src/components/ChatView.tsx` and the region
+props in `apps/web/src/lib/workspaceFocus.ts` when upstream changes panel focus.
+Verify opening/reopening, bidirectional F6 navigation and isolated focus history with
 `vp test run apps/web/src/lib/workspaceFocus.browser.test.ts`.
 
 Side chats inherit their parent's permission mode when created, including their

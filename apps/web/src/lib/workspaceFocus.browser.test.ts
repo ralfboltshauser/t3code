@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createWorkspaceFocusController } from "./workspaceFocus";
+import { createWorkspaceFocusController, workspaceAreaProps } from "./workspaceFocus";
 
 function setup() {
   const root = document.createElement("div");
   document.body.append(root);
   const controller = createWorkspaceFocusController(document);
-  const area = (name: string, order: number, parent: HTMLElement = root) => {
+  const area = (name: string, order: number, parent: HTMLElement = root, standalone = true) => {
     const element = document.createElement("section");
-    element.dataset.workspaceArea = name;
-    element.dataset.workspaceOrder = String(order);
-    element.tabIndex = -1;
+    for (const [key, value] of Object.entries(workspaceAreaProps(name, order, name, standalone))) {
+      element.setAttribute(key === "tabIndex" ? "tabindex" : key, String(value));
+    }
     const button = document.createElement("button");
     button.textContent = name;
     element.append(button);
@@ -20,9 +20,28 @@ function setup() {
     root.insertAdjacentHTML("beforeend", html);
     return root.lastElementChild as HTMLElement;
   };
+  const sideChat = (panel: HTMLElement) => {
+    const surface = document.createElement("div");
+    surface.dataset.rightPanelSurfaceContent = "";
+    surface.innerHTML =
+      '<div data-side-chat-pane><button aria-disabled="true">Bring back</button></div>';
+    panel.append(surface);
+    const pane = surface.firstElementChild as HTMLElement;
+    area("conversation", 1, pane, false);
+    const composer = area("composer", 2, pane, false);
+    composer.button.setAttribute("aria-label", "Attach files");
+    const editor = document.createElement("div");
+    editor.contentEditable = "true";
+    editor.setAttribute("role", "textbox");
+    editor.setAttribute("aria-label", "Message Side chat");
+    editor.innerHTML = "<p><br></p>";
+    composer.element.prepend(editor);
+    return { surface, editor, composer };
+  };
   return {
     area,
     append,
+    sideChat,
     controller,
     [Symbol.dispose]() {
       controller.dispose();
@@ -36,28 +55,74 @@ describe("workspace area focus", () => {
     using fixture = setup();
     const mainComposer = fixture.area("composer", 2);
     const panel = fixture.area("panel", 3);
-    panel.element.insertAdjacentHTML(
-      "beforeend",
-      `<div data-right-panel-surface-content>
-        <div data-side-chat-pane>
-          <button aria-disabled="true">Bring back</button>
-          <section data-workspace-area="composer">
-            <div contenteditable="true" role="textbox" aria-label="Message Side chat"><p><br></p></div>
-          </section>
-        </div>
-      </div>`,
-    );
+    const side = fixture.sideChat(panel.element);
     mainComposer.button.focus();
 
     expect(fixture.controller.focus("panel")).toBe(true);
-    expect(document.activeElement).toBe(panel.element.querySelector('[role="textbox"]'));
+    expect(document.activeElement).toBe(side.editor);
 
     panel.element.hidden = true;
     expect(fixture.controller.focus("content")).toBe(true);
     expect(document.activeElement).toBe(mainComposer.button);
     panel.element.hidden = false;
     expect(fixture.controller.focus("panel")).toBe(true);
-    expect(document.activeElement).toBe(panel.element.querySelector('[role="textbox"]'));
+    expect(document.activeElement).toBe(side.editor);
+  });
+
+  it("cycles through a side-chat panel once, in both directions", () => {
+    using fixture = setup();
+    fixture.area("sidebar", 0);
+    fixture.area("conversation", 1);
+    const mainComposer = fixture.area("composer", 2);
+    const details = fixture.area("details", 3);
+    const panel = fixture.area("panel", 4);
+    const terminal = fixture.area("terminal", 5);
+    const side = fixture.sideChat(panel.element);
+    mainComposer.button.focus();
+
+    fixture.controller.move(1);
+    expect(document.activeElement).toBe(details.button);
+    fixture.controller.move(1);
+    expect(document.activeElement).toBe(side.editor);
+    fixture.controller.move(1);
+    expect(document.activeElement).toBe(terminal.button);
+    fixture.controller.move(-1);
+    expect(document.activeElement).toBe(side.editor);
+    fixture.controller.move(-1);
+    expect(document.activeElement).toBe(details.button);
+    fixture.controller.move(-1);
+    expect(document.activeElement).toBe(mainComposer.button);
+  });
+
+  it("keeps focus history separate for the main composer and each side-chat tab", () => {
+    using fixture = setup();
+    const mainComposer = fixture.area("composer", 2);
+    mainComposer.element.insertAdjacentHTML(
+      "afterbegin",
+      '<div contenteditable="true">Draft</div>',
+    );
+    mainComposer.button.setAttribute("aria-label", "Attach files");
+    const panel = fixture.area("panel", 4);
+    panel.element.dataset.workspaceFocusKey = "panel:side-a";
+    const sideA = fixture.sideChat(panel.element);
+    mainComposer.button.focus();
+    fixture.controller.focus("panel");
+    expect(document.activeElement).toBe(sideA.editor);
+    sideA.composer.button.focus();
+    fixture.controller.focus("content");
+    expect(document.activeElement).toBe(mainComposer.button);
+
+    sideA.surface.remove();
+    panel.element.dataset.workspaceFocusKey = "panel:side-b";
+    const sideB = fixture.sideChat(panel.element);
+    fixture.controller.focus("panel");
+    expect(document.activeElement).toBe(sideB.editor);
+
+    sideB.surface.remove();
+    panel.element.dataset.workspaceFocusKey = "panel:side-a";
+    panel.element.append(sideA.surface);
+    fixture.controller.focus("panel");
+    expect(document.activeElement).toBe(sideA.composer.button);
   });
 
   it("cycles in workspace order in both directions, independent of DOM order", () => {
@@ -254,13 +319,18 @@ describe("workspace area focus", () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(composer.button));
   });
 
-  it("waits for a requested area to mount", async () => {
-    using fixture = setup();
-    fixture.area("composer", 2);
-    fixture.controller.request({ area: "pull-requests" });
-    const list = fixture.area("pull-requests", 1);
-    await vi.waitFor(() => expect(document.activeElement).toBe(list.button));
-  });
+  it.each(["pull-requests", "panel"])(
+    "waits for the requested %s content to mount",
+    async (name) => {
+      using fixture = setup();
+      fixture.area("composer", 2);
+      fixture.controller.request({ area: name });
+      const destination = fixture.area(name, 1);
+      const target =
+        name === "panel" ? fixture.sideChat(destination.element).editor : destination.button;
+      await vi.waitFor(() => expect(document.activeElement).toBe(target));
+    },
+  );
 
   it("keeps focus on a control that React remounted elsewhere", async () => {
     using fixture = setup();

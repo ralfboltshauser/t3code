@@ -8,11 +8,10 @@ const FOCUS_BOUNDARY_SELECTOR =
 const FOCUSABLE_SELECTOR =
   'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable="true"], [tabindex]';
 
-/** Props that make an element one stop in the F6 cycle; `order` sets its place in the cycle. */
-export function workspaceAreaProps(name: string, order: number, label: string) {
+/** A region and, when standalone, an F6 stop; embedded regions share their host's focus history. */
+export function workspaceAreaProps(name: string, order: number, label: string, standalone = true) {
   return {
-    "data-workspace-area": name,
-    "data-workspace-order": order,
+    ...(standalone ? { "data-workspace-area": name, "data-workspace-order": order } : {}),
     "aria-label": label,
     role: "region",
     tabIndex: -1,
@@ -105,14 +104,7 @@ export function createWorkspaceFocusController(doc: Document) {
   };
   doc.addEventListener("focusin", remember);
 
-  const focusArea = (requestedArea: HTMLElement, restore = true) => {
-    const sideChatComposer = requestedArea.querySelector<HTMLElement>(
-      '[data-side-chat-pane] [data-workspace-area="composer"]',
-    );
-    const area =
-      sideChatComposer && isWorkspaceElementVisible(sideChatComposer)
-        ? sideChatComposer
-        : requestedArea;
+  const focusArea = (area: HTMLElement, restore = true) => {
     const key = area.dataset.workspaceFocusKey ?? area.dataset.workspaceArea!;
     const previous = restore ? lastFocused.get(key) : undefined;
     const belongs = (element: HTMLElement) =>
