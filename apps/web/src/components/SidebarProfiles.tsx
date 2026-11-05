@@ -1,14 +1,5 @@
-import { ChevronsUpDownIcon, LayersIcon, Settings2Icon } from "lucide-react";
-import {
-  Menu,
-  MenuTrigger,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuRadioItemIndicator,
-  MenuSeparator,
-  MenuItem,
-} from "./ui/menu";
+import { CheckIcon, ChevronsUpDownIcon, LayersIcon, Settings2Icon } from "lucide-react";
+import { Menu, MenuTrigger, MenuPopup, MenuSeparator, MenuItem } from "./ui/menu";
 import { randomUUID } from "../lib/utils";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -115,27 +106,28 @@ export function SidebarProfileRail() {
           />
         </MenuTrigger>
         <MenuPopup side="top" align="start" className="w-(--anchor-width)">
-          <MenuRadioGroup value={activeId} onValueChange={(id) => void switchProfile(id)}>
-            {document.profiles.map((p) => (
-              <MenuRadioItem key={p.id} value={p.id} closeOnClick>
-                <span className="flex min-w-0 items-center gap-2">
-                  <span aria-hidden className="flex size-4 shrink-0 items-center justify-center">
-                    {p.icon}
-                  </span>
-                  <span className="truncate">{p.name}</span>
-                </span>
-                <MenuRadioItemIndicator />
-              </MenuRadioItem>
-            ))}
-            <MenuSeparator />
-            <MenuRadioItem value={ALL_PROFILES_ID} closeOnClick>
-              <span className="flex items-center gap-2">
-                <LayersIcon aria-hidden />
-                All profiles
+          {document.profiles.map((p) => (
+            <MenuItem
+              key={p.id}
+              aria-current={activeId === p.id ? "true" : undefined}
+              onClick={() => void switchProfile(p.id)}
+            >
+              <span aria-hidden className="flex size-4 shrink-0 items-center justify-center">
+                {p.icon}
               </span>
-              <MenuRadioItemIndicator />
-            </MenuRadioItem>
-          </MenuRadioGroup>
+              <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              {activeId === p.id ? <CheckIcon aria-hidden /> : null}
+            </MenuItem>
+          ))}
+          <MenuSeparator />
+          <MenuItem
+            aria-current={activeId === ALL_PROFILES_ID ? "true" : undefined}
+            onClick={() => void switchProfile(ALL_PROFILES_ID)}
+          >
+            <LayersIcon aria-hidden />
+            <span className="min-w-0 flex-1">All profiles</span>
+            {activeId === ALL_PROFILES_ID ? <CheckIcon aria-hidden /> : null}
+          </MenuItem>
           <MenuSeparator />
           <MenuItem onClick={() => openProfileManager()}>
             <Settings2Icon aria-hidden />

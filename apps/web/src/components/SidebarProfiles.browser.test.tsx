@@ -86,15 +86,22 @@ describe("sidebar profile integration", () => {
     await page.getByRole("button", { name: "Done", exact: true }).click();
     await expect.element(screen.getByText("Work repository")).not.toBeInTheDocument();
     await screen.getByRole("button", { name: "Switch profile: General", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: "Work", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Work", exact: true }).click();
     await expect.element(screen.getByText("Work repository")).toBeVisible();
     await expect
       .element(screen.getByRole("button", { name: "Switch profile: Work", exact: true }))
       .toBeVisible();
     await screen.getByRole("button", { name: "Switch profile: Work", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: "All profiles", exact: true }).click();
+    await expect
+      .element(page.getByRole("menuitem", { name: "Work", exact: true }))
+      .toHaveAttribute("aria-current", "true");
+    await page.getByRole("menuitem", { name: "All profiles", exact: true }).click();
     await expect
       .element(screen.getByRole("button", { name: "Switch profile: All profiles", exact: true }))
       .toBeVisible();
+    await screen.getByRole("button", { name: "Switch profile: All profiles", exact: true }).click();
+    await expect
+      .element(page.getByRole("menuitem", { name: "All profiles", exact: true }))
+      .toHaveAttribute("aria-current", "true");
   });
 });
