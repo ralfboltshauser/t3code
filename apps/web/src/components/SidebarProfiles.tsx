@@ -315,7 +315,7 @@ function ProfileManagerContent() {
           </ToggleGroup>
         </div>
       </DialogHeader>
-      <DialogPanel className="min-h-80" scrollFade={false}>
+      <DialogPanel className="min-h-56" scrollFade={false}>
         {error ? (
           <Alert variant="error">
             <AlertDescription>{error}</AlertDescription>
