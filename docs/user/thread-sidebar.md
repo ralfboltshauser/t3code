@@ -353,7 +353,7 @@ the project list in Manage profiles. A grouped folder moves only its currently
 visible project copies. Deleting a profile moves its assignments to a destination
 you choose; General can be renamed but cannot be deleted.
 
-On web and desktop, add keybindings for **Next Profile** and **Previous Profile**
+On web and desktop, add keybindings for **Profiles: Next Profile** and **Profiles: Previous Profile**
 in **Settings → Keybindings**. They cycle through your saved profile order,
 wrapping at the ends and skipping All profiles. No keys are assigned by default.
 
