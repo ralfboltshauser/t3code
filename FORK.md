@@ -144,6 +144,16 @@ captures of an input request beside its project summary; this is a visual change
 The fork also maintains project-local skills and coordinated deployment tooling
 under `scripts/personal-fork/`.
 
+`thread.markUnread` is an unbound command in Keybindings settings that marks the
+open persisted chat unread without navigating away. It reuses `useThreadActions`
+and existing visit semantics; drafts and held-key repeats do not dispatch it.
+Preserve the command registration in `packages/contracts/src/keybindings.ts` and
+the handler in web `chat/useThreadLifecycle.tsx`. Web and desktop share this path;
+embedded side chats and native mobile retain their existing shortcut scopes.
+Verify configuration decoding and unread visit preservation with
+`vp test run packages/contracts/src/keybindings.test.ts packages/client-runtime/src/state/threadVisits.test.ts`,
+then assign, reload, invoke and remove a custom binding in an isolated client.
+
 Record each customization here with its intended behavior, owning paths, and a
 focused verification command. Record intentional removals too, so an update
 cannot silently restore them.
