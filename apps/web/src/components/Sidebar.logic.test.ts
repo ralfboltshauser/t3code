@@ -33,7 +33,7 @@ import {
   resolveSidebarDropVerb,
   groupSidebarThreadsByProject,
   resolveSidebarProjectFolder,
-  resolveSidebarFolderDot,
+  resolveSidebarFolderSummary,
   sidebarFolderExpansionKeys,
 } from "./Sidebar.logic";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
@@ -1629,8 +1629,8 @@ describe("resolveSidebarProjectFolder", () => {
   });
 });
 
-describe("resolveSidebarFolderDot", () => {
-  it("flags the most urgent hidden thread and stays quiet otherwise", () => {
+describe("resolveSidebarFolderSummary", () => {
+  it("counts each chat once and follows its status through attention, working, unread, and read", () => {
     const idle = {
       hasActionableProposedPlan: false,
       hasPendingApprovals: false,
@@ -1655,14 +1655,55 @@ describe("resolveSidebarFolderDot", () => {
       runtime: { ...runtime, status: "failed" as const, lastErrorClass: "usage_limit" as const },
     };
 
-    expect(resolveSidebarFolderDot([idle])).toBeNull();
-    // A waiting thread stays quiet even with an unread completion, like its row.
+    const failed = { ...idle, runtime: { ...runtime, status: "failed" as const } };
+    const attention = { ...working, hasPendingUserInput: true };
     expect(
-      resolveSidebarFolderDot([{ ...unread, runtime: { ...runtime, status: "idle" as const } }]),
-    ).toBeNull();
-    expect(resolveSidebarFolderDot([idle, working])).toBe("working");
-    expect(resolveSidebarFolderDot([working, unread])).toBe("unread");
-    expect(resolveSidebarFolderDot([unread, limited])).toBe("attention");
+      resolveSidebarFolderSummary([idle, working, unread, limited, failed, attention]),
+    ).toEqual({
+      total: 6,
+      attention: 2,
+      failed: 1,
+      unread: 1,
+      working: 1,
+      quiet: 1,
+    });
+    const quiet = { total: 1, attention: 0, failed: 0, unread: 0, working: 0, quiet: 1 };
+    expect(resolveSidebarFolderSummary([idle])).toEqual(quiet);
+    expect(
+      resolveSidebarFolderSummary([
+        { ...unread, runtime: { ...runtime, status: "idle" as const } },
+      ]),
+    ).toEqual(quiet);
+    expect(resolveSidebarFolderSummary([{ ...unread, runtime }])).toEqual({
+      ...quiet,
+      quiet: 0,
+      working: 1,
+    });
+    expect(resolveSidebarFolderSummary([{ ...attention, hasPendingUserInput: false }])).toEqual({
+      ...quiet,
+      quiet: 0,
+      working: 1,
+    });
+    expect(resolveSidebarFolderSummary([unread])).toEqual({ ...quiet, quiet: 0, unread: 1 });
+    expect(resolveSidebarFolderSummary([{ ...unread, lastVisitedAt: idle.lastVisitedAt }])).toEqual(
+      quiet,
+    );
+    for (const thread of [
+      { ...idle, hasPendingApprovals: true },
+      { ...idle, pendingGuestMessageCount: 1 },
+      { ...idle, pendingSubagentRequest: "approval" as const },
+      { ...idle, pendingSubagentRequest: "user_input" as const },
+    ]) {
+      expect(resolveSidebarFolderSummary([thread])).toEqual({ ...quiet, quiet: 0, attention: 1 });
+    }
+    expect(resolveSidebarFolderSummary([])).toEqual({
+      total: 0,
+      attention: 0,
+      failed: 0,
+      unread: 0,
+      working: 0,
+      quiet: 0,
+    });
   });
 });
 

@@ -67,7 +67,7 @@ vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src
 
 The boring sidebar reuses the Working-section setting to fold independent work
 inside each project, rather than disabling Working. Keep the existing inbox
-classification and return ordering, selected-thread visibility, and hidden-folder
+classification and return ordering, selected-thread visibility, and project
 status summaries. Expansion is client-local per profile and repository group;
 profile membership is still applied before grouping. Preserve V2's global shelf,
 pinned/snoozed/settled placement, and mobile's existing layout. Owning paths are
@@ -95,6 +95,21 @@ Verify with:
 
 ```sh
 vp test run apps/web/src/composer-logic.test.ts apps/web/src/components/chat/QueuedRunsControl.browser.test.tsx
+```
+
+Project headers in the boring sidebar show a thin composition ring and the total
+of their section's chats whether expanded or collapsed, including folded Working
+members and the current chat. Preserve the exclusive status counts (attention,
+failure, unread completion, working, then read/idle), server-first visit watermarks,
+and exact accessible/tooltip breakdown. Rounded segments start clockwise from the
+top with small gaps; tiny shares retain their extent without overlapping caps.
+Keep the summary visible when the new-chat action replaces the chevron on hover.
+Owning paths are `Sidebar.logic.ts`, `Sidebar.tsx`,
+`sidebar/SidebarProjectFolderHeader.tsx`, and `sidebar/SidebarProjectStatus.tsx`.
+Verify transitions, exclusive counts, and stable totals through project folding:
+
+```sh
+cd apps/web && vp test run src/components/Sidebar.logic.test.ts src/components/Sidebar.browser.test.tsx
 ```
 
 The fork also maintains project-local skills and coordinated deployment tooling

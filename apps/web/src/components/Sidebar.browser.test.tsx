@@ -153,6 +153,11 @@ describe("project Working sections", () => {
       exact: true,
     });
     await expect.element(alphaHeader).toHaveAttribute("aria-expanded", "false");
+    const alphaFolder = screen.getByRole("button", {
+      name: "alpha, 1 chat: 1 working",
+      exact: true,
+    });
+    await expect.element(alphaFolder).toBeVisible();
     await expect.element(betaHeader).toHaveAttribute("aria-expanded", "false");
     await expect
       .element(screen.getByRole("button", { name: /^Alpha background/ }))
@@ -182,5 +187,18 @@ describe("project Working sections", () => {
     await expect.element(screen.getByRole("button", { name: /^Beta background/ })).toBeVisible();
     await expect.element(betaHeader).not.toBeInTheDocument();
     await expect.element(alphaHeader).toHaveAttribute("aria-expanded", "false");
+    const betaFolder = screen.getByRole("button", {
+      name: "beta, 1 chat: 1 needs attention",
+      exact: true,
+    });
+    await expect.element(betaFolder).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(betaFolder);
+    await expect.element(betaFolder).toHaveAttribute("aria-expanded", "false");
+    await expect
+      .element(screen.getByRole("button", { name: /^Beta background/ }))
+      .not.toBeInTheDocument();
+    await userEvent.click(betaFolder);
+    await expect.element(betaFolder).toHaveAttribute("aria-expanded", "true");
+    await expect.element(screen.getByRole("button", { name: /^Beta background/ })).toBeVisible();
   });
 });

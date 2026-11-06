@@ -556,6 +556,7 @@ function useSidebarThreads(input: {
             projectWorkingExpanded[workingExpansionKey(folder.group)] ?? false;
           return {
             group: folder.group,
+            summaryThreads: folder.threads,
             collapsed,
             workingExpanded,
             ...resolveSidebarProjectFolder({
@@ -3535,7 +3536,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 key={`project-folder:${folder.group.projectKey}`}
                                 group={folder.group}
                                 collapsed={folder.collapsed}
-                                hiddenThreads={folder.hiddenThreads}
+                                threads={folder.summaryThreads}
                                 onToggle={toggleProjectFolder}
                                 onNewThread={startThreadInProjectFolder}
                                 onContextMenu={handleProjectFolderContextMenu}
