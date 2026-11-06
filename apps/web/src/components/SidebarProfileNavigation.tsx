@@ -17,6 +17,9 @@ import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import { useQuietThreadShell, readThreadShell } from "../state/entities";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useRightPanelStore } from "../rightPanelStore";
+import { registerCommands } from "../shortcuts/dispatcher";
+import { isAppModalPage } from "./sidebar/mainAppLocation";
+import { isCommandPaletteOpen } from "../commandPaletteBus";
 
 const remembered = new Map<
   string,
@@ -58,6 +61,7 @@ export function useSwitchSidebarProfile() {
 }
 export function SidebarProfileNavigation() {
   const active = useProfilesActive();
+  const switchProfile = useSwitchSidebarProfile();
   const document = useSidebarProfiles((s) => s.document);
   const target = useThreadRouteTarget();
   const thread = useQuietThreadShell(target?.kind === "server" ? target.threadRef : null);
@@ -65,6 +69,37 @@ export function SidebarProfileNavigation() {
     target?.kind === "draft" ? s.getDraftSession(target.draftId) : null,
   );
   const pathname = useLocation({ select: (location) => location.pathname });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers configurable shortcuts with the app keyboard dispatcher
+  useEffect(() => {
+    if (!active) return;
+    const move = (direction: 1 | -1) => (event: KeyboardEvent) => {
+      const { document, activeId } = useSidebarProfiles.getState();
+      const profiles = document.profiles;
+      const index = profiles.findIndex((profile) => profile.id === activeId);
+      const destination =
+        index === -1
+          ? direction === 1
+            ? profiles[0]
+            : profiles.at(-1)
+          : profiles[(index + direction + profiles.length) % profiles.length];
+      if (!destination) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      void switchProfile(destination.id);
+    };
+    return registerCommands(
+      { "profile.next": move(1), "profile.previous": move(-1) },
+      {
+        when: (event) =>
+          !isAppModalPage(pathname) &&
+          !isCommandPaletteOpen() &&
+          !(
+            event.target instanceof Element &&
+            event.target.closest('[role="dialog"], [data-keybinding-capture]')
+          ),
+      },
+    );
+  }, [active, pathname, switchProfile]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- URL navigation and persisted membership changes reveal the owning profile
   useEffect(() => {
     if (pathname === "/" || pathname.startsWith("/settings")) return;

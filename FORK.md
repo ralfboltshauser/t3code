@@ -49,6 +49,10 @@ preserve profile intent across asynchronous project creation and pairing.
 Both index drafts and server-welcome bootstrap navigation wait for profile and
 client settings hydration. Profiles suppress bootstrap navigation, so reload
 cannot replace a saved context.
+Configurable `profile.next` and `profile.previous` shortcuts reuse profile
+navigation, wrap in saved order, and skip All profiles. Keep them available in
+Keybindings settings without assigning default keys; they are inactive in dialogs
+and settings and when profiles are disabled.
 
 Owning modules are `packages/client-runtime/src/sidebarProfiles.ts`, web
 `sidebarProfiles.ts` and `SidebarProfiles.tsx`, desktop

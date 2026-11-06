@@ -11,9 +11,15 @@ import { useProjects } from "../state/entities";
 import { SidebarProvider } from "./ui/sidebar";
 import { SidebarProfileManager, SidebarProfileRail } from "./SidebarProfiles";
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
+import { SidebarProfileNavigation } from "./SidebarProfileNavigation";
+import * as dispatcher from "../shortcuts/dispatcher";
+import { compileResolvedKeybindingsConfig } from "@t3tools/shared/keybindings";
+import { mutateSidebarProfiles, selectSidebarProfile } from "../sidebarProfiles";
+import { ALL_PROFILES_ID } from "@t3tools/client-runtime/sidebar-profiles";
 
 vi.mock("../state/entities", { spy: true });
 vi.mock("../state/environments", { spy: true });
+vi.mock("../shortcuts/dispatcher", { spy: true });
 const environmentId = EnvironmentId.make("profile-browser-test");
 const projectId = ProjectId.make("profile-project");
 function Groups() {
@@ -72,6 +78,72 @@ async function setup() {
   };
 }
 describe("sidebar profile integration", () => {
+  it("cycles configured profile shortcuts in current order, wrapping without All profiles", async () => {
+    using _setup = await setup();
+    const keybindings = compileResolvedKeybindingsConfig([
+      { command: "profile.next", key: "ctrl+alt+arrowright" },
+      { command: "profile.previous", key: "ctrl+alt+arrowleft" },
+    ]);
+    const { registerCommands: register } =
+      await vi.importActual<typeof dispatcher>("../shortcuts/dispatcher");
+    using _commands = vi
+      .spyOn(dispatcher, "registerCommands")
+      .mockImplementation((commands, options) =>
+        register(commands, { ...options, keybindings: () => keybindings }),
+      );
+    await using screen = await render(
+      <SidebarProvider>
+        <input aria-label="Shortcut recorder" data-keybinding-capture />
+        <SidebarProfileNavigation />
+        <SidebarProfileRail />
+      </SidebarProvider>,
+    );
+    const press = (key: "ArrowLeft" | "ArrowRight", target: EventTarget = window) => {
+      const event = new KeyboardEvent("keydown", {
+        key,
+        ctrlKey: true,
+        altKey: true,
+        cancelable: true,
+        bubbles: true,
+      });
+      target.dispatchEvent(event);
+      return event;
+    };
+    expect(press("ArrowRight").defaultPrevented).toBe(true);
+    await expect
+      .element(screen.getByRole("button", { name: "Switch profile: Work", exact: true }))
+      .toBeVisible();
+    press("ArrowRight");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("general"));
+    press("ArrowLeft");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("work"));
+    await mutateSidebarProfiles({
+      kind: "create",
+      profile: { id: "personal", name: "Personal", icon: "●", color: "green" },
+    });
+    await mutateSidebarProfiles({ kind: "reorder", profileIds: ["personal", "work", "general"] });
+    press("ArrowLeft");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("personal"));
+    selectSidebarProfile(ALL_PROFILES_ID);
+    press("ArrowRight");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("personal"));
+    selectSidebarProfile(ALL_PROFILES_ID);
+    press("ArrowLeft");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("general"));
+    expect(
+      press("ArrowRight", screen.getByRole("textbox", { name: "Shortcut recorder" }).element())
+        .defaultPrevented,
+    ).toBe(false);
+    expect(useSidebarProfiles.getState().activeId).toBe("general");
+    await mutateSidebarProfiles({ kind: "enable", enabled: false });
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Switch profile: General", exact: true }).query(),
+      ).toBeNull(),
+    );
+    expect(press("ArrowRight").defaultPrevented).toBe(false);
+    expect(useSidebarProfiles.getState().activeId).toBe("general");
+  });
   it("moves a physical project out of its former sidebar and exposes it in its destination", async () => {
     using _setup = await setup();
     await using screen = await render(
