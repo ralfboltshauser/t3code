@@ -8,6 +8,8 @@ import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useUiStateStore } from "../../uiStateStore";
 import { resolveSidebarFolderSummary, resolveThreadLastVisitedAt } from "../Sidebar.logic";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
+import type { resolveSidebarProjectHosts } from "./sidebarProjectHosts";
 import { Button } from "../ui/button";
 import {
   SidebarProjectStatus,
@@ -23,13 +25,14 @@ export function sidebarFolderRowId(projectKey: string) {
 
 export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHeader(props: {
   group: SidebarProjectSnapshot;
+  hostPresentation: ReturnType<typeof resolveSidebarProjectHosts>;
   collapsed: boolean;
   threads: readonly EnvironmentThreadShell[];
   onToggle: (group: SidebarProjectSnapshot) => void;
   onNewThread: (group: SidebarProjectSnapshot) => void;
   onContextMenu: (group: SidebarProjectSnapshot, position: { x: number; y: number }) => void;
 }) {
-  const { group, collapsed, threads } = props;
+  const { group, collapsed, threads, hostPresentation } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
   const localLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
   const summary = resolveSidebarFolderSummary(
@@ -54,6 +57,11 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
               data-sidebar-row={rowId}
               aria-expanded={!collapsed}
               aria-label={`${group.displayName}, ${sidebarProjectStatusLabel(summary)}`}
+              aria-description={
+                hostPresentation.hosts.length > 0
+                  ? `On ${hostPresentation.hosts.map((host) => host.label).join(", ")}`
+                  : undefined
+              }
               onClick={() => props.onToggle(group)}
               onContextMenu={(event) => {
                 event.preventDefault();
@@ -68,6 +76,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
               {summary.total > 0 ? <SidebarProjectStatus summary={summary} /> : null}
               <ChevronDownIcon
                 aria-hidden
+                style={{ color: hostPresentation.color }}
                 className={cn(
                   "size-3 shrink-0 text-sidebar-muted-foreground transition-transform group-hover/project-folder:invisible group-focus-within/project-folder:invisible pointer-coarse:invisible",
                   collapsed && "-rotate-90",
@@ -77,7 +86,26 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
           }
         />
         <TooltipPopup side="right">
-          <SidebarProjectStatusBreakdown summary={summary} />
+          <SidebarProjectStatusBreakdown
+            summary={summary}
+            heading={
+              hostPresentation.hosts.length > 0 ? (
+                <span className="grid gap-1">
+                  {hostPresentation.hosts.map((host) => (
+                    <span key={host.environmentId} className="flex items-center gap-1.5">
+                      <EnvironmentMachineIcon
+                        aria-hidden
+                        kind={host.machine}
+                        className="size-3.5 shrink-0 text-sidebar-muted-foreground"
+                        style={{ color: host.color }}
+                      />
+                      <span className="min-w-0">{host.label}</span>
+                    </span>
+                  ))}
+                </span>
+              ) : undefined
+            }
+          />
         </TooltipPopup>
       </Tooltip>
 

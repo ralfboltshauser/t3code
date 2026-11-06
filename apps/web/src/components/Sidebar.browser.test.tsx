@@ -6,7 +6,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import { render } from "../../test/render";
 import { openCommandPalette } from "../commandPaletteBus";
@@ -17,6 +17,9 @@ import { makeThreadFixture } from "../test-fixtures";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import type { Project } from "../types";
 import Sidebar from "./Sidebar";
+import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
+import { SidebarProjectFolderHeader } from "./sidebar/SidebarProjectFolderHeader";
+import { resolveSidebarProjectHosts } from "./sidebar/sidebarProjectHosts";
 import { SidebarProvider } from "./ui/sidebar";
 
 vi.mock("../state/entities", { spy: true });
@@ -201,4 +204,50 @@ describe("project Working sections", () => {
     await expect.element(betaFolder).toHaveAttribute("aria-expanded", "true");
     await expect.element(screen.getByRole("button", { name: /^Beta background/ })).toBeVisible();
   });
+});
+
+it("reveals the project host on hover and focus while keeping the new-chat action separate", async () => {
+  const local = EnvironmentId.make("local");
+  const remote = EnvironmentId.make("remote-mini");
+  const [group] = buildSidebarProjectSnapshots({
+    projects: [{ ...project("zli"), environmentId: remote }],
+    settings: { sidebarProjectGroupingMode: "separate", sidebarProjectGroupingOverrides: {} },
+    primaryEnvironmentId: local,
+    resolveEnvironmentLabel: () => "Mac mini",
+  });
+  const onToggle = vi.fn();
+  const onNewThread = vi.fn();
+  await using screen = await render(
+    <ul>
+      <SidebarProjectFolderHeader
+        group={group!}
+        collapsed={false}
+        threads={[makeThreadFixture({ environmentId: remote, projectId: group!.id })]}
+        hostPresentation={resolveSidebarProjectHosts({
+          members: group!.memberProjects,
+          primaryEnvironmentId: local,
+          catalog: new Map(),
+          catalogReady: true,
+          machineByEnvironmentId: new Map([[remote, "mac-mini"]]),
+        })}
+        onToggle={onToggle}
+        onNewThread={onNewThread}
+        onContextMenu={() => {}}
+      />
+    </ul>,
+  );
+  const folder = screen.getByRole("button", { name: /^zli, 1 chat:/ });
+  await userEvent.hover(folder);
+  await expect.element(page.getByText("Mac mini", { exact: true })).toBeVisible();
+  await expect.element(page.getByText("Read or idle", { exact: true })).toBeVisible();
+  await expect.element(folder).toHaveAttribute("aria-description", "On Mac mini");
+  await userEvent.unhover(folder);
+  await expect.element(page.getByText("Mac mini", { exact: true })).not.toBeInTheDocument();
+  await userEvent.tab();
+  await expect.element(folder).toHaveFocus();
+  await expect.element(page.getByText("Mac mini", { exact: true })).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  await userEvent.click(screen.getByRole("button", { name: "New thread in zli", exact: true }));
+  expect(onNewThread).toHaveBeenCalledOnce();
+  expect(onToggle).not.toHaveBeenCalled();
 });
