@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { resolveSidebarFolderSummary } from "../Sidebar.logic";
 
 const SEGMENTS = [
@@ -79,11 +81,17 @@ export function SidebarProjectStatus({ summary }: { summary: Summary }) {
   );
 }
 
-export function SidebarProjectStatusBreakdown({ summary }: { summary: Summary }) {
+export function SidebarProjectStatusBreakdown({
+  summary,
+  heading,
+}: {
+  summary: Summary;
+  heading?: ReactNode;
+}) {
   return (
     <div className="grid gap-1 py-0.5">
       <span className="font-medium">
-        {summary.total} {summary.total === 1 ? "chat" : "chats"}
+        {heading ?? `${summary.total} ${summary.total === 1 ? "chat" : "chats"}`}
       </span>
       {SEGMENTS.filter(({ key }) => summary[key] > 0).map(({ key, label, dot }) => (
         <span key={key} className="flex items-center gap-2">

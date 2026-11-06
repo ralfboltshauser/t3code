@@ -141,6 +141,23 @@ tint in `widgets/AgentActivity.tsx`. Guest identity colors remain separate from
 pending request status. Verify with `vp run check:changed` and light/dark client
 captures of an input request beside its project summary; this is a visual change.
 
+Project-folder chevrons use stable environment-ID accents for secondary hosts;
+primary and known desktop-local environments stay neutral, while multi-environment
+folders use a distinct shared accent. The existing project tooltip replaces its
+chat-count heading with matching machine icons and environment names, retaining
+status rows, accessible totals, row dimensions and New chat hover behavior.
+Keep this presentation in web sidebar `sidebarProjectHosts.ts`,
+`SidebarProjectFolderHeader.tsx` and the optional heading in
+`SidebarProjectStatus.tsx`, wired through `Sidebar.tsx`. Reuse existing catalog
+identities, desktop-local classification and machine icons; do not add persisted
+color assignments or infer locality from URLs. Native mobile is unchanged.
+Verify identity deduplication, stable accents, local neutrality and hover/focus
+without changing New chat behavior:
+
+```sh
+vp test run apps/web/src/components/sidebar/sidebarProjectHosts.test.ts apps/web/src/components/Sidebar.browser.test.tsx
+```
+
 The fork also maintains project-local skills and coordinated deployment tooling
 under `scripts/personal-fork/`. Release verification runs one candidate check
 process and binds its completed exit status and log to unchanged source and

@@ -158,6 +158,8 @@ import {
   useQuietThreadShells,
 } from "../state/entities";
 import { environmentPresentations } from "../state/presentation";
+import { environmentCatalog } from "../connection/catalog";
+import { resolveSidebarProjectHosts } from "./sidebar/sidebarProjectHosts";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { environmentProjects } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
@@ -1039,6 +1041,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     routeTarget?.kind === "draft" ? store.getDraftSession(routeTarget.draftId) : null,
   );
   const environmentMachineById = useEnvironmentMachines();
+  const connectionCatalog = useAtomValue(environmentCatalog.catalogValueAtom);
   const projectGroupsRef = useRef(projectGroups);
   const persistedProjectScopeKeys = useUiStateStore((store) => store.sidebarProjectScopeKeys);
   const setPersistedProjectScopeKeys = useUiStateStore((store) => store.setSidebarProjectScopeKeys);
@@ -3550,6 +3553,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarProjectFolderHeader
                                 key={`project-folder:${folder.group.projectKey}`}
                                 group={folder.group}
+                                hostPresentation={resolveSidebarProjectHosts({
+                                  members: folder.group.memberProjects,
+                                  primaryEnvironmentId,
+                                  catalog: connectionCatalog.entries,
+                                  catalogReady: connectionCatalog.isReady,
+                                  machineByEnvironmentId: environmentMachineById,
+                                })}
                                 collapsed={folder.collapsed}
                                 threads={folder.summaryThreads}
                                 onToggle={toggleProjectFolder}
