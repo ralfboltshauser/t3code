@@ -190,6 +190,8 @@ import {
   filterSidebarV2VisibleThreads,
   groupSidebarThreadsByProject,
   resolveSidebarProjectFolder,
+  isSidebarReadThread,
+  resolveThreadLastVisitedAt,
   sidebarFolderExpansionKeys,
   buildBulkTitleRegenerationContextMenuItem,
   buildBulkUnpinContextMenuItem,
@@ -459,6 +461,11 @@ function useSidebarThreads(input: {
     {} as Record<string, boolean>,
     ProjectWorkingExpansionSchema,
   );
+  const [projectReadExpanded, setProjectReadExpanded] = useLocalStorage(
+    "t3code:sidebar:project-read-expanded:v1",
+    {} as Record<string, boolean>,
+    ProjectWorkingExpansionSchema,
+  );
   const workingExpansionKey = (group: SidebarProjectSnapshot) =>
     JSON.stringify([profilesActive ? activeProfileId : null, group.projectKey]);
   const inboxReturnsVersion = useSyncExternalStore(
@@ -543,6 +550,24 @@ function useSidebarThreads(input: {
     ? workingThreads
     : routeThreadOnly(workingThreads, routeRowThreadKey);
   const workingKeys = new Set(workingThreads.map(threadShellKey));
+  const localLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
+  const readKeys = new Set(
+    activeThreads
+      .filter(
+        (thread) =>
+          isSidebarReadThread(
+            {
+              ...thread,
+              lastVisitedAt: resolveThreadLastVisitedAt(
+                thread.lastVisitedAt,
+                localLastVisitedAtById[threadShellKey(thread)],
+              ),
+            },
+            threadWokeAt(thread, { now: partition.snoozeNow }),
+          ) && !isThreadWorking(thread),
+      )
+      .map(threadShellKey),
+  );
   const projectFolders =
     folderGroups === null
       ? null
@@ -557,7 +582,9 @@ function useSidebarThreads(input: {
           );
           const workingExpanded =
             projectWorkingExpanded[workingExpansionKey(folder.group)] ?? false;
+          const readExpanded = projectReadExpanded[workingExpansionKey(folder.group)] ?? false;
           return {
+            readExpanded,
             group: folder.group,
             summaryThreads: folder.threads,
             collapsed,
@@ -565,6 +592,8 @@ function useSidebarThreads(input: {
             ...resolveSidebarProjectFolder({
               threads: folder.threads,
               workingKeys,
+              readKeys,
+              readExpanded,
               collapsed,
               workingExpanded,
               routeThreadKey: routeRowThreadKey,
@@ -575,7 +604,11 @@ function useSidebarThreads(input: {
     ...pinnedThreads,
     ...(projectFolders === null
       ? [...activeThreads, ...visibleWorkingThreads]
-      : projectFolders.flatMap((folder) => [...folder.threads, ...folder.workingThreads])),
+      : projectFolders.flatMap((folder) => [
+          ...folder.threads,
+          ...folder.workingThreads,
+          ...folder.readThreads,
+        ])),
     ...visibleSnoozedThreads,
     ...renderedSettledThreads,
   ];
@@ -616,6 +649,10 @@ function useSidebarThreads(input: {
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
+    toggleProjectRead: (group: SidebarProjectSnapshot) => {
+      const key = workingExpansionKey(group);
+      setProjectReadExpanded((current) => ({ ...current, [key]: !current[key] }));
+    },
     toggleProjectWorking: (group: SidebarProjectSnapshot) => {
       const key = workingExpansionKey(group);
       setProjectWorkingExpanded((current) => ({ ...current, [key]: !current[key] }));
@@ -1383,6 +1420,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     toggleWorkingShelf,
     projectFolders,
     toggleProjectWorking,
+    toggleProjectRead,
     toggleProjectFolder,
     renderedSettledThreads,
     visibleSnoozedThreads,
@@ -2017,6 +2055,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         : projectFolders.flatMap((folder) => [
             ...rowsOf(folder.threads, "active"),
             ...rowsOf(folder.workingThreads, "working"),
+            ...rowsOf(folder.readThreads, "active"),
           ]);
     items.push({ kind: "marker", marker: "active-placeholder" });
     items.push(...activeRows);
@@ -2062,7 +2101,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     projectFolders
       ?.map(
         (folder) =>
-          `${folder.group.projectKey}:${folder.collapsed}:${folder.workingExpanded}:${folder.threads.length}:${folder.workingThreads.length}`,
+          `${folder.group.projectKey}:${folder.collapsed}:${folder.workingExpanded}:${folder.readExpanded}:${folder.threads.length}:${folder.workingThreads.length}`,
       )
       .join("\n") ?? "",
     visibleDraftSessionCount,
@@ -2077,7 +2116,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     snoozedShelfExpanded,
     settledShelfExpanded,
     projectFolders
-      ?.map((folder) => `${folder.group.projectKey}:${folder.collapsed}:${folder.workingExpanded}`)
+      ?.map(
+        (folder) =>
+          `${folder.group.projectKey}:${folder.collapsed}:${folder.workingExpanded}:${folder.readExpanded}`,
+      )
       .join("\n"),
   ].join(":");
   const previousShelfExpansionKeyRef = useRef(shelfExpansionKey);
@@ -3595,6 +3637,30 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   "working",
                                   folder.showWorkingHeader
                                     ? sidebarProjectWorkingRowId(folder.group.projectKey)
+                                    : sidebarFolderRowId(folder.group.projectKey),
+                                ),
+                              );
+                            }
+                            if (folder.showReadHeader) {
+                              items.push(
+                                <SidebarProjectWorkingHeader
+                                  key={sidebarProjectWorkingRowId(folder.group.projectKey, "Read")}
+                                  section="Read"
+                                  projectKey={folder.group.projectKey}
+                                  projectName={folder.group.displayName}
+                                  count={folder.readCount}
+                                  expanded={folder.readExpanded}
+                                  onToggle={() => toggleProjectRead(folder.group)}
+                                />,
+                              );
+                            }
+                            for (const thread of folder.readThreads) {
+                              items.push(
+                                renderThreadRow(
+                                  thread,
+                                  "active",
+                                  folder.showReadHeader
+                                    ? sidebarProjectWorkingRowId(folder.group.projectKey, "Read")
                                     : sidebarFolderRowId(folder.group.projectKey),
                                 ),
                               );

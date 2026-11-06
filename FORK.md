@@ -89,12 +89,15 @@ vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src
 The boring sidebar reuses the Working-section setting to fold independent work
 inside each project, rather than disabling Working. Keep the existing inbox
 classification and return ordering, selected-thread visibility, and project
-status summaries. Expansion is client-local per profile and repository group;
+status summaries. Read/idle unsettled chats also fold into a separate Read group,
+while unread results, failures, actionable plans, requests, and unseen snooze wakes
+stay visible. Read folding is independent of the Working setting; opening either
+group never settles its threads. Expansion is client-local per profile and repository group;
 profile membership is still applied before grouping. Preserve V2's global shelf,
 pinned/snoozed/settled placement, and mobile's existing layout. Owning paths are
 `Sidebar.tsx`, `Sidebar.logic.ts`, `sidebar/SidebarProjectWorkingHeader.tsx`, and
 `lib/sidebarTree.ts` (nested focus recovery). Verify folding, current-thread
-visibility, actionable returns, and keyboard fallback with:
+visibility, read/unread transitions, actionable returns, and keyboard fallback with:
 
 ```sh
 vp test run apps/web/src/components/Sidebar.logic.test.ts apps/web/src/components/Sidebar.browser.test.tsx apps/web/src/lib/sidebarTree.browser.test.ts
