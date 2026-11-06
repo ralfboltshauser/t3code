@@ -2222,7 +2222,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         sendShortcut: settings.sendShortcut,
         prompt: promptRef.current,
       });
-      if (!intent) return;
+      if (!intent || intent === "queued-message") return;
       event.preventDefault();
       event.stopImmediatePropagation();
       submitComposer(
