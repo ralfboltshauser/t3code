@@ -964,12 +964,34 @@ it.effect.each(["full-access", "approval-required"] as const)(
       );
       const created = yield* orchestrator.getThreadProjection(sideChatId);
       assert.equal(created.thread.runtimeMode, runtimeMode);
+      const changedParentMode = runtimeMode === "full-access" ? "approval-required" : "full-access";
+      yield* orchestrator.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("side-chat-parent-mode-change"),
+        threadId: parentId,
+        runtimeMode: changedParentMode,
+      });
+      assert.equal(
+        (yield* orchestrator.getThreadProjection(sideChatId)).thread.runtimeMode,
+        runtimeMode,
+      );
+      yield* orchestrator.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("side-chat-child-mode-change"),
+        threadId: sideChatId,
+        runtimeMode: "auto",
+      });
       yield* askSideChat(sideChatId, "side-chat-idle-first-message", {
         ...forkCases[0]!.modelSelection,
         model: "side-chat-model",
       });
 
       const started = yield* orchestrator.getThreadProjection(sideChatId);
+      assert.equal(started.thread.runtimeMode, "auto");
+      assert.equal(
+        (yield* orchestrator.getThreadProjection(parentId)).thread.runtimeMode,
+        changedParentMode,
+      );
       assert.isNotNull(started.providerThreads[0]?.forkedFrom);
       // The side chat does not show the parent's run, so it is no baseline.
       assert.isFalse(

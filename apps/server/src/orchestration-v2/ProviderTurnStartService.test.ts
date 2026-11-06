@@ -299,10 +299,10 @@ function makeLocalCommandHarness(input: {
    * parent. `switchedProvider` puts the earlier run and its context on another provider thread.
    */
   readonly sideChat?: {
-    readonly runtimeMode?: "full-access" | "approval-required";
     readonly contextRun: "current" | "failed" | "cancelled" | "delivered";
     readonly nativeForkFrom?: "idle" | "busy";
     readonly switchedProvider?: boolean;
+    readonly threadRuntimeMode?: OrchestrationV2ThreadProjection["thread"]["runtimeMode"];
   };
 }) {
   const settledRuns: Array<string> = [];
@@ -567,7 +567,7 @@ function makeLocalCommandHarness(input: {
       ...projection,
       thread: {
         ...projection.thread,
-        runtimeMode: input.sideChat.runtimeMode ?? "full-access",
+        runtimeMode: input.sideChat.threadRuntimeMode ?? "full-access",
         lineage: {
           parentThreadId,
           relationshipToParent: "fork",
@@ -1270,14 +1270,19 @@ effectIt.effect.each([
     context: "SIDE_CHAT_CONTEXT",
   },
   { contextRun: "delivered", runtimeMode: "full-access", context: "" },
-  { contextRun: "current", runtimeMode: "approval-required", context: "SIDE_CHAT_CONTEXT" },
+  {
+    contextRun: "current",
+    threadRuntimeMode: "approval-required",
+    runtimeMode: "approval-required",
+    context: "SIDE_CHAT_CONTEXT",
+  },
 ] as const)(
   "sends side chat context inline once, for the first turn that reaches the provider: %j",
   ({ runtimeMode, context, ...sideChat }) =>
     Effect.gen(function* () {
       const harness = makeLocalCommandHarness({
         text: "What is the main thread doing?",
-        sideChat: { ...sideChat, runtimeMode },
+        sideChat,
       });
 
       yield* harness.start;
@@ -1304,7 +1309,7 @@ effectIt.effect(
     Effect.gen(function* () {
       const harness = makeLocalCommandHarness({
         text: "What is the main thread doing?",
-        sideChat: { contextRun: "current", runtimeMode: "full-access" },
+        sideChat: { contextRun: "current", threadRuntimeMode: "full-access" },
       });
       harness.resolveRuntimePolicy.mockImplementation(({ thread }) =>
         thread.runtimeMode === "full-access"
