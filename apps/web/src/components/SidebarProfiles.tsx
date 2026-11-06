@@ -478,7 +478,12 @@ function ProfileManagerContent() {
                     }}
                   >
                     <SelectTrigger id={`${formId}-color`} aria-label="Profile color">
-                      <SelectValue />
+                      <SelectValue>
+                        <span className="flex items-center gap-2">
+                          <span aria-hidden className={`size-2 rounded-full ${colors[color]}`} />
+                          {color[0]!.toUpperCase() + color.slice(1)}
+                        </span>
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {SIDEBAR_PROFILE_COLORS.map((c) => (
