@@ -468,6 +468,7 @@ export interface ChatComposerProps {
     dispatchMode?: ComposerDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
   ) => void;
+  onSendLatestQueuedMessage?: () => void;
   onResume: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
@@ -579,6 +580,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onPageScrollRelease,
     onCompactContext,
     onSend,
+    onSendLatestQueuedMessage,
     onResume,
     onInterrupt,
     onImplementPlanInNewThread,
@@ -2218,6 +2220,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       routeKind,
       phase,
       isCompacting,
+      isComposerEmpty:
+        canOperateThread &&
+        !isSendDisabled &&
+        !environmentUnavailable &&
+        !isEditingQueuedMessage &&
+        pendingUserInputs.length === 0 &&
+        pendingApprovals.length === 0 &&
+        !showPlanFollowUpPrompt &&
+        !composerDraftHasUserContent(getComposerDraft(composerDraftTarget)) &&
+        !pendingDraftWork.has(attachmentTargetKey) &&
+        countPreparingComposerImages(attachmentTargetKey) === 0,
+      onSendLatestQueuedMessage: () => onSendLatestQueuedMessage?.(),
       followUpBehavior,
       isSoftwareKeyboardOpen,
       planModeUiEnabled,

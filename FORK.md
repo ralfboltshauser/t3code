@@ -79,6 +79,21 @@ visibility, actionable returns, and keyboard fallback with:
 vp test run apps/web/src/components/Sidebar.logic.test.ts apps/web/src/components/Sidebar.browser.test.tsx apps/web/src/lib/sidebarTree.browser.test.ts
 ```
 
+An empty chat composer sends the latest queued human message with Mod+Enter,
+using the existing Send now command and eligibility rules. Pending optimistic
+messages wait for their exact server acknowledgement; navigation, removal, or a
+changed active turn cancels that pending shortcut. Preserve the editor-local
+routing in `composer-logic.ts`, `chat/composerCommandKey.ts`, `ChatComposer.tsx`
+and `ChatView.tsx`, and the selection/acknowledgement handling in
+`chat/QueuedRunsControl.tsx`. Keep nonempty submissions and the existing
+Mod+Shift+Enter first-queued-message shortcut unchanged. Web, desktop, and
+embedded side chats share this path; native mobile keeps its existing controls.
+Verify with:
+
+```sh
+vp test run apps/web/src/composer-logic.test.ts apps/web/src/components/chat/QueuedRunsControl.browser.test.tsx
+```
+
 The fork also maintains project-local skills and coordinated deployment tooling
 under `scripts/personal-fork/`.
 

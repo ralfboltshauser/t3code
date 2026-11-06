@@ -123,6 +123,50 @@ describe("composerSubmissionIntentForKey", () => {
     ).toBe(expected);
   });
 
+  it.each(["enter", "mod-enter", "mod-enter-multiline"] as const)(
+    "sends the last queued message from an empty composer with %s",
+    (sendShortcut) => {
+      for (const platform of ["MacIntel", "Linux", "Win32"]) {
+        const event = {
+          ...enter,
+          metaKey: platform === "MacIntel",
+          ctrlKey: platform !== "MacIntel",
+        };
+        const empty = {
+          ...input,
+          platform,
+          event,
+          sendShortcut,
+          isRunning: true,
+          isComposerEmpty: true,
+        };
+        expect(composerSubmissionIntentForKey(empty)).toBe("queued-message");
+        for (const override of [
+          { event: { ...event, repeat: true } },
+          { event: { ...event, isComposing: true } },
+          { event: { ...event, keyCode: 229 } },
+          { event: { ...event, altKey: true } },
+          { event: { ...event, shiftKey: true } },
+          { event: { ...enter } },
+          { isDraftThread: true },
+          { isComposerEmpty: false },
+          { prompt: "Unsent draft" },
+          {
+            keybindings: mergeWithDefaultKeybindings(
+              compileResolvedKeybindingsConfig([
+                { key: "mod+enter", command: "composer.effort", when: "composerFocus" },
+              ]),
+            ),
+          },
+        ]) {
+          expect(composerSubmissionIntentForKey({ ...empty, ...override })).not.toBe(
+            "queued-message",
+          );
+        }
+      }
+    },
+  );
+
   it("honors the send preference with an existing install's saved alternate binding", () => {
     const keybindings = mergeWithDefaultKeybindings(
       compileResolvedKeybindingsConfig([

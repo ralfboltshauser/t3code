@@ -16,6 +16,7 @@ import {
 } from "./composer-editor-mentions";
 
 import { resolveShortcutCommand, type ShortcutEventLike } from "./keybindings";
+import { isMacPlatform } from "@t3tools/shared/keybindings";
 
 export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
 export type ComposerSlashCommand = "model" | "plan" | "default" | "side" | "btw" | "clear";
@@ -63,9 +64,10 @@ export function composerSubmissionIntentForKey(input: {
   isSoftwareKeyboardOpen: boolean;
   isDraftThread: boolean;
   isRunning?: boolean;
+  isComposerEmpty?: boolean;
   sendShortcut?: ClientSettings["sendShortcut"];
   prompt?: string;
-}): ComposerSubmissionIntent | null {
+}): ComposerSubmissionIntent | "queued-message" | null {
   const { event } = input;
   if (event.isComposing || event.keyCode === 229 || event.repeat) return null;
   if (input.isSoftwareKeyboardOpen && event.key === "Enter" && !event.metaKey && !event.ctrlKey)
@@ -79,6 +81,20 @@ export function composerSubmissionIntentForKey(input: {
       composerRequiresModifier: composerRequiresModifier(input.sendShortcut, input.prompt ?? ""),
     },
   });
+  if (
+    input.isComposerEmpty &&
+    !(input.prompt ?? "").trim() &&
+    !input.isDraftThread &&
+    (command === null || command === "composer.sendAlternate") &&
+    event.key === "Enter" &&
+    !event.shiftKey &&
+    !event.altKey &&
+    (isMacPlatform(input.platform ?? navigator.platform)
+      ? event.metaKey && !event.ctrlKey
+      : event.ctrlKey && !event.metaKey)
+  ) {
+    return "queued-message";
+  }
   if (command === "composer.sendAlternate" && input.isRunning) return "alternate";
   if (command === "composer.sendBackground" && input.isDraftThread) return "background";
   if (command === "composer.sendAndNewThread" && !input.isDraftThread) return "background";

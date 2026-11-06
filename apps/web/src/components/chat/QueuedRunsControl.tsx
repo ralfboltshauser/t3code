@@ -24,7 +24,16 @@ import {
   XIcon,
 } from "lucide-react";
 import * as DateTime from "effect/DateTime";
-import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
 
 import { useAssetUrls } from "../../assets/assetUrls";
 import { threadEnvironment } from "../../state/threads";
@@ -57,6 +66,7 @@ const QUEUE_VISIBLE_ROWS = 3;
 
 export interface QueuedRunsControlHandle {
   steerNext: (repeat: boolean) => boolean;
+  sendLatest: () => boolean;
   editLatest: (repeat: boolean) => boolean;
 }
 
@@ -103,6 +113,12 @@ export function QueuedRunsControl({
   const queueListId = useId();
   const [busyRunId, setBusyRunId] = useState<RunId | null>(null);
   const steerInFlightRef = useRef(false);
+  const [pendingSend, setPendingSend] = useState<{
+    messageId: MessageId;
+    environmentId: EnvironmentId;
+    threadId: ThreadId;
+    targetRunId: RunId | null;
+  } | null>(null);
   // Run-only acknowledgements can resurrect pending rows after cancellation or startup.
   const acknowledgedMessageIds = new Set((projection?.messages ?? []).map((message) => message.id));
   const queuedImageAttachmentResources = queuedImageResources(projection);
@@ -191,11 +207,71 @@ export function QueuedRunsControl({
     setBusyRunId(null);
   };
 
+  const sendAcknowledgedMessage = useEffectEvent(() => {
+    if (pendingSend === null) return;
+    const target = queued.find(({ run }) => run.userMessageId === pendingSend.messageId);
+    const stillPending = optimisticQueued.some(({ id }) => id === pendingSend.messageId);
+    if (
+      pendingSend.environmentId !== props.environmentId ||
+      pendingSend.threadId !== props.threadId ||
+      pendingSend.targetRunId !== (activeRun?.id ?? null) ||
+      props.editingRunId !== null ||
+      props.editBlockedReason !== null ||
+      !canSendRun(target?.run.freshContext === true) ||
+      (!target && !stillPending)
+    ) {
+      setPendingSend(null);
+      return;
+    }
+    if (!target || busyRunId !== null) return;
+    setPendingSend(null);
+    void sendQueuedMessage(target.run.id);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- waits for the server to acknowledge the exact optimistic message before promoting its run
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- a server acknowledgement consumes or invalidates the pending keyboard request
+    sendAcknowledgedMessage();
+  }, [
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- external queue updates and scope changes must retry the pending request with current state
+    pendingSend,
+    busyRunId,
+    projection,
+    props.optimisticMessages,
+    props.environmentId,
+    props.threadId,
+    props.editingRunId,
+    props.editBlockedReason,
+  ]);
+
   useImperativeHandle(ref, () => ({
     steerNext(repeat) {
       const next = queued[0];
       if (!next || !canSendRun(next.run.freshContext === true)) return false;
       if (!repeat && busyRunId === null) void sendQueuedMessage(next.run.id);
+      return true;
+    },
+    sendLatest() {
+      if (props.editingRunId !== null || props.editBlockedReason !== null) return false;
+      if (pendingSend !== null || steerInFlightRef.current || busyRunId !== null) return true;
+      const optimistic = optimisticQueued.at(-1);
+      const latest = queued.reduce<(typeof queued)[number] | undefined>((latest, candidate) => {
+        if (candidate.context?.guest !== undefined || candidate.message?.createdBy === "agent") {
+          return latest;
+        }
+        return !latest || candidate.run.ordinal > latest.run.ordinal ? candidate : latest;
+      }, undefined);
+      if (!canSendRun(!optimistic && latest?.run.freshContext === true) || (!optimistic && !latest))
+        return false;
+      if (optimistic) {
+        setPendingSend({
+          messageId: optimistic.id,
+          environmentId: props.environmentId,
+          threadId: props.threadId,
+          targetRunId: activeRun?.id ?? null,
+        });
+      } else if (latest) {
+        void sendQueuedMessage(latest.run.id);
+      }
       return true;
     },
     // Leave the key to caret navigation while editing.

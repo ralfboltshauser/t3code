@@ -1,13 +1,14 @@
-import { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, MessageId, RunId, ThreadId } from "@t3tools/contracts";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 import * as DateTime from "effect/DateTime";
-import type { ComponentProps } from "react";
+import { createRef, type ComponentProps } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 
 const state = vi.hoisted(() => ({
   projection: null as unknown,
   workflow: null as unknown,
+  dispatch: vi.fn(async (_input: unknown): Promise<void> => undefined),
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/thread-workflows"), async (importOriginal) => ({
@@ -31,7 +32,7 @@ vi.mock(import("../../state/query"), async (importOriginal) => ({
 
 vi.mock(import("../../state/use-atom-command"), async (importOriginal) => ({
   ...(await importOriginal()),
-  useAtomCommand: (() => async () => undefined) as never,
+  useAtomCommand: (() => state.dispatch) as never,
 }));
 
 vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
@@ -42,11 +43,12 @@ vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
 
 import "~/index.css";
 import { render as renderUi } from "../../../test/render";
-import { QueuedRunsControl } from "./QueuedRunsControl";
+import { QueuedRunsControl, type QueuedRunsControlHandle } from "./QueuedRunsControl";
 
 function setup() {
   state.projection = null;
   state.workflow = null;
+  state.dispatch.mockReset();
 }
 
 const baseProps = {
@@ -203,3 +205,160 @@ it("stays inside the timeline scroller instead of growing the chat column", asyn
   const column = screen.getByTestId("column").element();
   expect(column.scrollHeight).toBe(column.clientHeight);
 });
+
+function queuedWorkflow() {
+  return {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    queuedRuns: [1, 2].map((ordinal) => ({
+      run: {
+        id: RunId.make(`run:${ordinal}`),
+        userMessageId: MessageId.make(`message:${ordinal}`),
+        ordinal,
+      },
+      text: `Queued ${ordinal}`,
+      attachments: [],
+    })),
+  };
+}
+
+it("sends the newest queued message through Send now without duplicate dispatches", async () => {
+  setup();
+  state.projection = { projection: { messages: [] } };
+  const workflow = queuedWorkflow();
+  // Queue order can differ from submission order.
+  workflow.queuedRuns.reverse();
+  state.workflow = workflow;
+  let resolveDispatch!: () => void;
+  const dispatch = new Promise<void>((resolve) => {
+    resolveDispatch = resolve;
+  });
+  state.dispatch.mockImplementation(() => dispatch);
+  const ref = createRef<QueuedRunsControlHandle>();
+  await using _screen = await renderQueue({ ref });
+
+  expect(ref.current?.sendLatest()).toBe(true);
+  expect(ref.current?.sendLatest()).toBe(true);
+  resolveDispatch();
+  await vi.waitFor(() =>
+    expect(state.dispatch).toHaveBeenCalledExactlyOnceWith({
+      environmentId: baseProps.environmentId,
+      input: {
+        threadId: baseProps.threadId,
+        queuedRunId: "run:2",
+        targetRunId: "run:active",
+      },
+    }),
+  );
+});
+
+it("waits for the exact optimistic message instead of sending an older queued row", async () => {
+  setup();
+  state.projection = { projection: { messages: [] } };
+  const workflow = queuedWorkflow();
+  state.workflow = workflow;
+  const ref = createRef<QueuedRunsControlHandle>();
+  const optimistic = {
+    id: MessageId.make("message:pending"),
+    inputIntent: "queued_turn" as const,
+    text: "Latest message",
+  };
+  const props = { ref, optimisticMessages: [optimistic] };
+  await using screen = await renderQueue(props);
+
+  expect(ref.current?.sendLatest()).toBe(true);
+  expect(ref.current?.sendLatest()).toBe(true);
+  expect(state.dispatch).not.toHaveBeenCalled();
+
+  state.projection = { projection: { messages: [{ id: optimistic.id }] } };
+  state.workflow = {
+    ...workflow,
+    queuedRuns: [
+      ...workflow.queuedRuns,
+      {
+        run: { id: "run:pending", userMessageId: optimistic.id, ordinal: 3 },
+        text: optimistic.text,
+        attachments: [],
+      },
+    ],
+  };
+  await screen.rerender(<QueuedRunsControl {...baseProps} {...props} />);
+  await vi.waitFor(() =>
+    expect(state.dispatch).toHaveBeenCalledExactlyOnceWith({
+      environmentId: baseProps.environmentId,
+      input: {
+        threadId: baseProps.threadId,
+        queuedRunId: "run:pending",
+        targetRunId: "run:active",
+      },
+    }),
+  );
+});
+
+it.each(["removed", "target changed", "thread changed"])(
+  "drops pending promotion when the message is %s",
+  async (change) => {
+    setup();
+    state.projection = { projection: { messages: [] } };
+    const workflow = queuedWorkflow();
+    state.workflow = workflow;
+    const ref = createRef<QueuedRunsControlHandle>();
+    const optimistic = {
+      id: MessageId.make("message:pending"),
+      inputIntent: "queued_turn" as const,
+      text: "Latest message",
+    };
+    await using screen = await renderQueue({ ref, optimisticMessages: [optimistic] });
+    expect(ref.current?.sendLatest()).toBe(true);
+    const nextProps = {
+      ...baseProps,
+      ref,
+      threadId: change === "thread changed" ? ThreadId.make("thread:other") : baseProps.threadId,
+      optimisticMessages: change === "removed" ? [] : [optimistic],
+    };
+    state.workflow = {
+      ...workflow,
+      activeRun: { id: change === "target changed" ? "run:other" : "run:active" },
+    };
+    await screen.rerender(<QueuedRunsControl {...nextProps} />);
+    state.projection = { projection: { messages: [{ id: optimistic.id }] } };
+    state.workflow = {
+      ...workflow,
+      queuedRuns: [
+        {
+          run: { id: "run:pending", userMessageId: optimistic.id, ordinal: 3 },
+          text: optimistic.text,
+          attachments: [],
+        },
+      ],
+    };
+    await screen.rerender(<QueuedRunsControl {...nextProps} />);
+    expect(state.dispatch).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["fresh context", "unsupported steering", "editing", "question"])(
+  "keeps the message queued during %s",
+  async (block) => {
+    setup();
+    state.projection = { projection: { messages: [] } };
+    const workflow = queuedWorkflow();
+    state.workflow = {
+      ...workflow,
+      canPromoteToSteer: block !== "unsupported steering",
+      queuedRuns: workflow.queuedRuns.map((entry) => ({
+        ...entry,
+        run: { ...entry.run, freshContext: block === "fresh context" },
+      })),
+    };
+    const ref = createRef<QueuedRunsControlHandle>();
+    await using screen = await renderQueue({
+      ref,
+      editingRunId: block === "editing" ? RunId.make("run:2") : null,
+      editBlockedReason: block === "question" ? "Answer the question first" : null,
+    });
+    expect(ref.current?.sendLatest()).toBe(false);
+    expect(state.dispatch).not.toHaveBeenCalled();
+    await expect.element(screen.getByText("Queued 2", { exact: true })).toBeVisible();
+  },
+);

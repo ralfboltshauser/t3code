@@ -39,6 +39,8 @@ export function composerCommandKeyHandler(input: {
   readonly routeKind: ChatComposerProps["routeKind"];
   readonly phase: ChatComposerProps["phase"];
   readonly isCompacting: boolean;
+  readonly isComposerEmpty: boolean;
+  readonly onSendLatestQueuedMessage: () => void;
   readonly followUpBehavior: ChatComposerProps["settings"]["followUpBehavior"];
   readonly isSoftwareKeyboardOpen: boolean;
   readonly planModeUiEnabled: boolean;
@@ -205,6 +207,7 @@ export function composerCommandKeyHandler(input: {
       isSoftwareKeyboardOpen,
       isDraftThread: routeKind === "draft",
       isRunning: phase === "running",
+      isComposerEmpty: input.isComposerEmpty,
       sendShortcut,
       prompt: promptRef.current,
     });
@@ -241,6 +244,10 @@ export function composerCommandKeyHandler(input: {
     }
     if ((key === "ArrowUp" || key === "ArrowDown") && submissionIntent === null) {
       return navigatePromptHistory(key === "ArrowUp" ? "backward" : "forward", event);
+    }
+    if (submissionIntent === "queued-message") {
+      if (!menuIsActive) input.onSendLatestQueuedMessage();
+      return true;
     }
     if (submissionIntent) {
       submitComposer(

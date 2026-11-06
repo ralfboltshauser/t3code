@@ -1876,6 +1876,9 @@ export default function ChatView(props: ChatViewProps) {
   };
   const sendAppMessageStable = useStableCallback(sendAppMessage);
   const queuedRunsControlRef = useRef<QueuedRunsControlHandle>(null);
+  const sendLatestQueuedMessageStable = useStableCallback(() => {
+    queuedRunsControlRef.current?.sendLatest();
+  });
 
   const {
     activatePanelTerminalStable,
@@ -3723,6 +3726,7 @@ export default function ChatView(props: ChatViewProps) {
                               onPageScrollRelease={onComposerPageScrollReleaseStable}
                               onCompactContext={onComposerCompactContextStable}
                               onSend={onComposerSendStable}
+                              onSendLatestQueuedMessage={sendLatestQueuedMessageStable}
                               onResume={onComposerResumeStable}
                               onInterrupt={onInterruptStable}
                               onImplementPlanInNewThread={onImplementPlanInNewThreadStable}
