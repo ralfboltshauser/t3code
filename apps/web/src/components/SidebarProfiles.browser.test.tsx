@@ -78,7 +78,7 @@ async function setup() {
   };
 }
 describe("sidebar profile integration", () => {
-  it("cycles configured profile shortcuts in current order, wrapping without All profiles", async () => {
+  it("cycles configured profile shortcuts in current order, including All profiles when wrapping", async () => {
     using _setup = await setup();
     const keybindings = compileResolvedKeybindingsConfig([
       { command: "profile.next", key: "ctrl+alt+arrowright" },
@@ -120,7 +120,11 @@ describe("sidebar profile integration", () => {
       .element(screen.getByRole("button", { name: "Switch profile: Work", exact: true }))
       .toBeVisible();
     press("ArrowRight");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe(ALL_PROFILES_ID));
+    press("ArrowRight");
     await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("general"));
+    press("ArrowLeft");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe(ALL_PROFILES_ID));
     press("ArrowLeft");
     await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("work"));
     await mutateSidebarProfiles({
@@ -142,7 +146,11 @@ describe("sidebar profile integration", () => {
     ).toBe(false);
     expect(useSidebarProfiles.getState().activeId).toBe("general");
     dispatchMenuAction("profile.next");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe(ALL_PROFILES_ID));
+    dispatchMenuAction("profile.next");
     await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("personal"));
+    dispatchMenuAction("profile.previous");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe(ALL_PROFILES_ID));
     dispatchMenuAction("profile.previous");
     await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("general"));
     await mutateSidebarProfiles({ kind: "enable", enabled: false });

@@ -50,7 +50,7 @@ Both index drafts and server-welcome bootstrap navigation wait for profile and
 client settings hydration. Profiles suppress bootstrap navigation, so reload
 cannot replace a saved context.
 Configurable `profile.next` and `profile.previous` shortcuts reuse profile
-navigation, wrap in saved order, and skip All profiles. Keep them available in
+navigation and wrap in saved order, including All profiles after the last profile. Keep them available in
 Keybindings settings without assigning default keys; they are inactive in dialogs
 and settings and when profiles are disabled.
 Keep `SidebarProfileNavigation.tsx` handlers and the desktop Browser forwarding

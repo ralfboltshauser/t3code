@@ -78,8 +78,8 @@ export function SidebarProfileNavigation() {
       !(target instanceof Element && target.closest('[role="dialog"], [data-keybinding-capture]'));
     const move = (direction: 1 | -1) => (event?: KeyboardEvent) => {
       const { document, activeId } = useSidebarProfiles.getState();
-      const profiles = document.profiles;
-      const index = profiles.findIndex((profile) => profile.id === activeId);
+      const profiles = [...document.profiles.map((profile) => profile.id), ALL_PROFILES_ID];
+      const index = profiles.indexOf(activeId);
       const destination =
         index === -1
           ? direction === 1
@@ -89,7 +89,7 @@ export function SidebarProfileNavigation() {
       if (!destination) return false;
       event?.preventDefault();
       event?.stopPropagation();
-      void switchProfile(destination.id);
+      void switchProfile(destination);
     };
     const unregister = registerCommands(
       { "profile.next": move(1), "profile.previous": move(-1) },

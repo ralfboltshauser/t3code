@@ -355,7 +355,8 @@ you choose; General can be renamed but cannot be deleted.
 
 On web and desktop, add keybindings for **Profiles: Next Profile** and **Profiles: Previous Profile**
 in **Settings → Keybindings**. They cycle through your saved profile order,
-wrapping at the ends and skipping All profiles. No keys are assigned by default.
+including All profiles after the last profile and wrapping at the ends. No keys
+are assigned by default.
 
 Profiles are saved separately on each desktop installation, browser origin, and
 mobile device. They organize navigation rather than access: switching keeps
