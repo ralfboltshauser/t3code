@@ -17,7 +17,7 @@ import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import { useQuietThreadShell, readThreadShell } from "../state/entities";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useRightPanelStore } from "../rightPanelStore";
-import { registerCommands } from "../shortcuts/dispatcher";
+import { registerCommands, registerMenuAction } from "../shortcuts/dispatcher";
 import { isAppModalPage } from "./sidebar/mainAppLocation";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 
@@ -72,7 +72,11 @@ export function SidebarProfileNavigation() {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers configurable shortcuts with the app keyboard dispatcher
   useEffect(() => {
     if (!active) return;
-    const move = (direction: 1 | -1) => (event: KeyboardEvent) => {
+    const canSwitch = (target: EventTarget | null) =>
+      !isAppModalPage(pathname) &&
+      !isCommandPaletteOpen() &&
+      !(target instanceof Element && target.closest('[role="dialog"], [data-keybinding-capture]'));
+    const move = (direction: 1 | -1) => (event?: KeyboardEvent) => {
       const { document, activeId } = useSidebarProfiles.getState();
       const profiles = document.profiles;
       const index = profiles.findIndex((profile) => profile.id === activeId);
@@ -83,22 +87,25 @@ export function SidebarProfileNavigation() {
             : profiles.at(-1)
           : profiles[(index + direction + profiles.length) % profiles.length];
       if (!destination) return false;
-      event.preventDefault();
-      event.stopPropagation();
+      event?.preventDefault();
+      event?.stopPropagation();
       void switchProfile(destination.id);
     };
-    return registerCommands(
+    const unregister = registerCommands(
       { "profile.next": move(1), "profile.previous": move(-1) },
       {
-        when: (event) =>
-          !isAppModalPage(pathname) &&
-          !isCommandPaletteOpen() &&
-          !(
-            event.target instanceof Element &&
-            event.target.closest('[role="dialog"], [data-keybinding-capture]')
-          ),
+        when: (event) => canSwitch(event.target),
       },
     );
+    const disposers = [
+      unregister,
+      ...(["profile.next", "profile.previous"] as const).map((command) =>
+        registerMenuAction(command, () => {
+          if (canSwitch(window.document.activeElement)) move(command === "profile.next" ? 1 : -1)();
+        }),
+      ),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
   }, [active, pathname, switchProfile]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- URL navigation and persisted membership changes reveal the owning profile
   useEffect(() => {

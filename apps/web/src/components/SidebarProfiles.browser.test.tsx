@@ -84,13 +84,19 @@ describe("sidebar profile integration", () => {
       { command: "profile.next", key: "ctrl+alt+arrowright" },
       { command: "profile.previous", key: "ctrl+alt+arrowleft" },
     ]);
-    const { registerCommands: register } =
-      await vi.importActual<typeof dispatcher>("../shortcuts/dispatcher");
+    const {
+      registerCommands: register,
+      registerMenuAction,
+      dispatchMenuAction,
+    } = await vi.importActual<typeof dispatcher>("../shortcuts/dispatcher");
     using _commands = vi
       .spyOn(dispatcher, "registerCommands")
       .mockImplementation((commands, options) =>
         register(commands, { ...options, keybindings: () => keybindings }),
       );
+    using _menuCommands = vi
+      .spyOn(dispatcher, "registerMenuAction")
+      .mockImplementation(registerMenuAction);
     await using screen = await render(
       <SidebarProvider>
         <input aria-label="Shortcut recorder" data-keybinding-capture />
@@ -135,6 +141,10 @@ describe("sidebar profile integration", () => {
         .defaultPrevented,
     ).toBe(false);
     expect(useSidebarProfiles.getState().activeId).toBe("general");
+    dispatchMenuAction("profile.next");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("personal"));
+    dispatchMenuAction("profile.previous");
+    await vi.waitFor(() => expect(useSidebarProfiles.getState().activeId).toBe("general"));
     await mutateSidebarProfiles({ kind: "enable", enabled: false });
     await vi.waitFor(() =>
       expect(

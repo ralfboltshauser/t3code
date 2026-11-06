@@ -53,6 +53,8 @@ Configurable `profile.next` and `profile.previous` shortcuts reuse profile
 navigation, wrap in saved order, and skip All profiles. Keep them available in
 Keybindings settings without assigning default keys; they are inactive in dialogs
 and settings and when profiles are disabled.
+Keep `SidebarProfileNavigation.tsx` handlers and the desktop Browser forwarding
+list in `ReopenClosedViewShortcut.tsx` connected to the same profile actions.
 
 Owning modules are `packages/client-runtime/src/sidebarProfiles.ts`, web
 `sidebarProfiles.ts` and `SidebarProfiles.tsx`, desktop
