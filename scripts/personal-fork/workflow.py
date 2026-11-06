@@ -11,6 +11,8 @@ import socket
 import subprocess
 import sys
 
+import verification
+
 from host import atomic_json
 from layout import shared_root
 from manage import now
@@ -264,23 +266,46 @@ class Workflow:
             return self.save(release)
 
     def verify(self, identity, checks):
-        with self.lock():
-            release = self.read_release(identity)
-            self.clean(release['candidate'])
-            commit = self.sha('HEAD', release['candidate'])
-            for parent in [release['personal'], release['upstream'], *(f['head'] for f in release['features'])]:
-                if not self.ancestor(parent, commit):
-                    raise RuntimeError('Candidate omits a frozen input')
-            if not checks.strip():
-                raise RuntimeError('Actual combined check results are required')
-            release.update(commit=commit, checks=checks, phase='verified')
-            return self.save(release)
+        release = self.read_release(identity)
+        candidate = Path(release['candidate'])
+        with verification.candidate_lock(candidate) as lock_fd:
+            with self.lock():
+                release = self.read_release(identity)
+                self.clean(candidate)
+                commit = self.sha('HEAD', candidate)
+                for parent in [release['personal'], release['upstream'], *(f['head'] for f in release['features'])]:
+                    if not self.ancestor(parent, commit):
+                        raise RuntimeError('Candidate omits a frozen input')
+                if not checks.strip():
+                    raise RuntimeError('Record the actual semantic/client verification results')
+                release.pop('verification', None)
+                release.pop('verification_error', None)
+                release.update(phase='verifying', commit=commit, checks=checks)
+                self.save(release)
+            try:
+                evidence = verification.check(candidate, release['personal'], self.state / 'verification' / identity, now, lock_fd)
+                if evidence['commit'] != commit:
+                    raise RuntimeError('Verification inputs changed before checks started; rerun')
+            except BaseException as error:
+                with self.lock():
+                    current = self.read_release(identity)
+                    if current == release:
+                        release.update(phase='verification-failed', verification_error=str(error))
+                        self.save(release)
+                raise
+            with self.lock():
+                current = self.read_release(identity)
+                if current != release:
+                    raise RuntimeError('Release changed while verification ran; inspect and retry')
+                release.update(verification=evidence, checks=checks, phase='verified')
+                return self.save(release)
 
     def publish(self, identity):
         with self.lock():
             release = self.read_release(identity)
             if release['phase'] not in ('verified', 'published', 'staged'):
                 raise RuntimeError('Verify the combined candidate before publication')
+            verification.validate(release)
             self.clean(release['candidate'])
             if self.sha('HEAD', release['candidate']) != release['commit']:
                 raise RuntimeError('Candidate changed after verification')
@@ -297,6 +322,7 @@ class Workflow:
         release = self.read_release(identity)
         if release['phase'] not in ('published', 'staged'):
             raise RuntimeError('Publish the verified release first')
+        verification.validate(release)
         stage(release['commit'])
         from manage import inventory
         with self.lock():
@@ -378,7 +404,14 @@ class Workflow:
             lines.append('- No new upstream commits.')
         lines += ['', '## Excluded or deferred']
         lines += [f"- {f.get('id', f.get('marker'))}: {f['reason']}" for f in release['excluded']] or ['- None.']
-        lines += ['', '## Verification', release.get('checks', 'Combined verification pending.'), '', '## Installation']
+        lines += ['', '## Verification', release.get('checks', 'Combined verification pending.')]
+        evidence = release.get('verification')
+        if evidence:
+            lines += [f"Check process: {evidence['status']}, exit {evidence['exit_code']}, {evidence['duration_seconds']}s.",
+                      f"Log: {evidence['log']}"]
+        if release.get('verification_error'):
+            lines.append('Verification failed: ' + release['verification_error'])
+        lines += ['', '## Installation']
         lines += [f"- {h['id']}: running {h['installed']}" for h in release.get('hosts', [])]
         if not release.get('hosts'):
             lines += [f'- {host}: staged; installation not yet verified.' for host in release.get('staged_hosts', [])] or ['- Not staged.']

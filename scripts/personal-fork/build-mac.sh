@@ -19,8 +19,11 @@ cd "$repo"
 version="$(node -p "require('./apps/server/package.json').version.split('-')[0]")-preview.$(date +%Y%m%d).$(date +%s)"
 vp install --frozen-lockfile
 node scripts/build-desktop-artifact.ts --platform mac --target dir --arch arm64 --build-version "$version" --output-dir "$destination/build"
-app="$destination/T3 Code (Personal).app"
-test ! -e "$app"
+target="$destination/T3 Code (Personal).app"
+test ! -e "$target"
+workspace="$(mktemp -d "$destination/.signing.XXXXXX")"
+trap 'rm -rf "$workspace"' EXIT
+app="$workspace/T3 Code (Personal).app"
 ditto "$destination/build/mac-arm64/T3 Code (Beta).app" "$app"
 python3 - "$app/Contents/Info.plist" "$commit" "$settings" "$hosts" <<'PY'
 import json,plistlib,sys
@@ -40,3 +43,4 @@ PY
 codesign --force --deep --timestamp=none --sign "$identity" "$app"
 codesign --verify --deep --strict "$app"
 git show "$commit:pnpm-lock.yaml" > pnpm-lock.yaml
+mv "$app" "$target"

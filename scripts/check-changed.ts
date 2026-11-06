@@ -218,6 +218,7 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   readonly ref: Option.Option<string>;
   readonly concurrency: Option.Option<number>;
   readonly timeout: Option.Option<number>;
+  readonly fresh: boolean;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -310,7 +311,7 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   const cached = yield* fs
     .readFileString(cachePath)
     .pipe(Effect.flatMap(decodeCacheEntry), Effect.option);
-  if (Option.isSome(cached) && cached.value.key === key) {
+  if (!input.fresh && Option.isSome(cached) && cached.value.key === key) {
     yield* Console.log("Nothing changed since the last passing run.\n");
     for (const line of cached.value.summary) yield* Console.log(line);
     return true;
@@ -597,6 +598,10 @@ export const checkChangedCommand = Command.make(
         "Budget of parallel steps and typecheck workers; also CHECK_CHANGED_CONCURRENCY. Defaults to one per two cores and per 6 GiB of available memory.",
       ),
       Flag.optional,
+    ),
+    fresh: Flag.Boolean("fresh").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Run checks even when the aggregate passing-result cache matches."),
     ),
     timeout: Flag.Int("timeout").pipe(
       Flag.withDescription(

@@ -75,7 +75,8 @@ recorded in `state/decisions.md`. Preserve blocked candidates.
 python3 scripts/personal-fork/workflow.py list
 python3 scripts/personal-fork/workflow.py freeze RELEASE_ID
 python3 scripts/personal-fork/workflow.py integrate RELEASE_ID
-# Check the returned candidate, including check:changed against its pinned personal.
+# Review the candidate and run manifest/interaction/client checks.
+# verify owns the one check:changed process against pinned personal.
 python3 scripts/personal-fork/workflow.py verify RELEASE_ID --checks "Actual results"
 python3 scripts/personal-fork/workflow.py publish RELEASE_ID
 python3 scripts/personal-fork/workflow.py stage RELEASE_ID
@@ -84,10 +85,19 @@ python3 scripts/personal-fork/workflow.py report RELEASE_ID
 
 Start with `workflow.py finalize` to finish cleanup of earlier installed releases;
 a verified newer cohort containing that release also qualifies. Use a unique
-lowercase release ID. `verify` records evidence; it does not run the
-checks for the agent. Publication rejects a changed candidate or concurrent
-`personal` advance. Reconcile and reverify rather than force pushing. Builds run
-once per host from the exact published result. The normal release request covers
+lowercase release ID. `verify` runs
+`vp run check:changed PERSONAL_SHA --fresh` in the candidate,
+with a per-candidate verification lock, and records the completed exit status,
+source/environment fingerprint and log digest. `--checks` records the separate
+manifest, interaction and client checks. Wait for process exit zero; a log with a
+passing step is not completion. A failed or interrupted attempt revokes earlier
+verification. Publication and staging require the saved completed evidence and
+unchanged inputs; older prose-only releases need verification before restaging.
+The fresh flag bypasses only the aggregate passing-result cache; existing
+compilation/task caches remain available. Publication rejects a changed candidate
+or concurrent `personal` advance. Reconcile and reverify rather than force pushing.
+Independent host builds run concurrently from the exact published result; all
+builders settle before cohort validation and queuing. The normal release request covers
 publication/staging and eligible cleanup, without a separate confirmation step.
 Analysis and prototype requests do not authorize a release.
 
@@ -107,8 +117,9 @@ deletes may use a SHA lease; rewriting `personal` or `main` remains prohibited.
 Retained work is reported with the reason, not called cleaned. Build caches and
 backups are outside feature-worktree cleanup.
 
-`./update-personal.sh` remains a low-level way to stage already-published personal;
-it does not gather features or merge upstream. Prefer the release skill.
+`./update-personal.sh` remains a low-level way to stage already-published personal
+with completed release verification evidence; it does not gather features or merge
+upstream. Prefer the release skill.
 
 ## Daily upstream inspection — 21:00 Europe/Zurich
 
@@ -143,7 +154,10 @@ messages to other people; avoid duplicate interactive reviews.
 for every host, and writes `state/pending.json` only after all pass. A queued
 ancestor revision may be superseded under the release lock before cutover; its
 record is archived and idle observations reset. Divergent queues or a cutover
-journal block replacement. Failed builds leave the existing queue intact. Install the
+journal block replacement. Failed builds leave the existing queue intact.
+Mac bundles are signed and
+strictly verified at a temporary path before atomic publication, so interruption
+cannot expose an unsigned bundle as ready. Install the
 logged-in Mac's worker with `python3 scripts/personal-fork/install-worker.py`;
 it invokes `deploy` every five minutes while the Mac is awake and logged in.
 

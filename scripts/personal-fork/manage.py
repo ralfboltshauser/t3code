@@ -4,6 +4,7 @@
 import argparse
 import base64
 import contextlib
+from concurrent.futures import ThreadPoolExecutor
 import datetime
 import fcntl
 import hashlib
@@ -15,6 +16,8 @@ import shlex
 import subprocess
 import sys
 import time
+
+import verification
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from host import atomic_json
@@ -100,10 +103,23 @@ def pending_release(commit):
     return previous
 
 
+def build_host(host, config, build, commit):
+    print(f"Building {host['id']} at {commit}", flush=True)
+    if host["transport"] == "local":
+        destination = LOCAL / "staging" / commit
+        destination.mkdir(parents=True, exist_ok=True)
+        run("bash", str(SCRIPTS / "build-mac.sh"), str(LOCAL), str(build), commit, str(destination), str(LOCAL / "settings.json"), str(LOCAL / "hosts.json"), capture=False)
+    else:
+        args = ["bash", "-s", "--", host["repo"], host["install_root"], commit, host["arch"], config["origin"]]
+        run("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host["ssh"], shlex.join(args), input=(SCRIPTS / "build-linux.sh").read_text(), text=True, capture=False)
+    print(f"Built {host['id']} at {commit}", flush=True)
+
+
 def stage(commit):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Supply a full 40-character source commit")
     with locked("release"):
+        verification.require_commit(STATE, commit)
         pending = STATE / "pending.json"
         previous = pending_release(commit)
         config = inventory()
@@ -126,19 +142,21 @@ def stage(commit):
             run("git", "-C", str(build), "checkout", "--detach", commit, capture=False)
         if run("git", "-C", str(build), "rev-parse", "HEAD") != commit or run("git", "-C", str(build), "status", "--porcelain"):
             raise RuntimeError("Build checkout has changes or the wrong revision; preserve and inspect it")
-        for host in config["hosts"]:
-            if host_call(host, "probe", commit)["target_ready"]:
-                continue
-            if host["transport"] == "local":
-                destination = LOCAL / "staging" / commit
-                destination.mkdir(parents=True, exist_ok=True)
-                run("bash", str(SCRIPTS / "build-mac.sh"), str(LOCAL), str(build), commit, str(destination), str(LOCAL / "settings.json"), str(LOCAL / "hosts.json"), capture=False)
-            else:
-                args = ["bash", "-s", "--", host["repo"], host["install_root"], commit, host["arch"], config["origin"]]
-                run("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host["ssh"], shlex.join(args), input=(SCRIPTS / "build-linux.sh").read_text(), text=True, capture=False)
+        builders = [h for h in config["hosts"] if not host_call(h, "probe", commit)["target_ready"]]
+        failures = []
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(builders)))) as pool:
+            jobs = [(h, pool.submit(build_host, h, config, build, commit)) for h in builders]
+            for host, job in jobs:
+                try:
+                    job.result()
+                except Exception as error:
+                    failures.append(f"{host['id']}: {error}")
+        if failures:
+            raise RuntimeError('Build failed; queue unchanged: ' + '; '.join(failures))
         for host in config["hosts"]:
             if not host_call(host, "probe", commit)["target_ready"]:
                 raise RuntimeError("A host has no verified staged artifact")
+        verification.require_commit(STATE, commit)
         if previous and previous["commit"] != commit:
             atomic_json(STATE / "superseded" / (previous["commit"] + ".json"), previous)
             (STATE / "idle-observation.json").unlink(missing_ok=True)

@@ -1,6 +1,8 @@
 """Exercise readiness and integration against disposable real Git repositories."""
 
 import json
+import os
+import sys
 import subprocess
 import sqlite3
 import tempfile
@@ -11,6 +13,7 @@ from unittest.mock import patch
 import workflow
 import manage
 import host
+import verification
 from host import atomic_json
 
 
@@ -27,12 +30,43 @@ class WorkflowTest(unittest.TestCase):
         self.git(self.repo, 'config', 'user.email', 'fixture@example.invalid')
         self.git(self.repo, 'config', 'commit.gpgsign', 'false')
         self.git(self.repo, 'config', 'tag.gpgsign', 'false')
-        self.commit(self.repo, 'base')
+        (self.repo / '.gitignore').write_text('.t3-fork/\n.env\nnode_modules/\n.astro/\n')
+        (self.repo / 'config').mkdir()
+        (self.repo / 'config/settings').write_text('fixture')
+        (self.repo / 'config-link').symlink_to('config', target_is_directory=True)
+        self.git(self.repo, 'add', '.gitignore', 'config', 'config-link')
+        initial = self.commit(self.repo, 'base')
+        self.git(self.repo, 'update-index', '--add', '--cacheinfo', f'160000,{initial},reference')
+        self.git(self.repo, 'commit', '-m', 'fixture submodule')
+        (self.repo / 'reference').mkdir()
         self.git(self.repo, 'remote', 'add', 'origin', str(self.remote))
         self.git(self.repo, 'push', 'origin', 'personal')
         self.git(self.repo, 'remote', 'add', 'upstream', str(self.remote))
         self.git(self.repo, 'push', 'origin', 'personal:main')
         self.engine = workflow.Workflow(self.repo)
+        self.control = self.root / 'check-mode'
+        self.control.write_text('pass')
+        binary = self.root / 'bin/vp'
+        binary.parent.mkdir()
+        binary.write_text(f"""#!{sys.executable}
+import os,sys
+from pathlib import Path
+assert sys.argv[1:3] == ['run', 'check:changed'], sys.argv
+mode = Path(os.environ['CHECK_FIXTURE_MODE']).read_text()
+print('check fixture: ' + mode, flush=True)
+if mode == 'dirty':
+ Path('base').write_text('changed')
+if mode == 'generated':
+ target=Path('.astro/content.d.ts'); state=target.stat(); target.write_bytes(target.read_bytes()); os.utime(target, ns=(state.st_atime_ns,state.st_mtime_ns))
+if mode == 'reverted':
+ target = Path('base'); value = target.read_bytes(); target.write_bytes(b'changed'); target.write_bytes(value)
+sys.exit(1 if mode == 'fail' else 0)
+""")
+        binary.chmod(0o755)
+        environment = patch.dict(os.environ, {'PATH': str(binary.parent) + os.pathsep + os.environ['PATH'],
+                                            'CHECK_FIXTURE_MODE': str(self.control)})
+        environment.start()
+        self.addCleanup(environment.stop)
         probe = patch.object(workflow.Workflow, 'source_probe', lambda engine, feature: dict(head=feature['head'], dirty=False, active=False))
         probe.start()
         self.addCleanup(probe.stop)
@@ -101,6 +135,71 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(self.git(self.repo, 'ls-remote', 'origin', 'refs/heads/personal').split()[0], release['commit'])
         self.commit(candidate, 'after-checks')
         with self.assertRaisesRegex(RuntimeError, 'changed'):
+            self.engine.publish('batch')
+
+    def test_verification_requires_completed_checks_and_revokes_previous_success(self):
+        self.engine.freeze('batch')
+        self.engine.integrate('batch')
+        release = self.engine.verify('batch', 'semantic checks passed')
+        self.assertEqual(release['verification']['exit_code'], 0)
+        self.assertEqual(release['verification']['status'], 'completed')
+        generated = Path(release['candidate']) / '.astro/content.d.ts'
+        generated.parent.mkdir()
+        generated.write_text('generated fixture')
+        self.control.write_text('generated')
+        self.engine.verify('batch', 'cached generator restores identical bytes')
+        self.control.write_text('pass')
+        with verification.candidate_lock(release['candidate']):
+            with self.assertRaisesRegex(RuntimeError, 'already running'):
+                self.engine.verify('batch', 'checks')
+        with patch.object(verification, 'run_check', side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.engine.verify('batch', 'checks')
+        with self.assertRaisesRegex(RuntimeError, '[Vv]erif'):
+            self.engine.publish('batch')
+        self.engine.verify('batch', 'checks')
+        self.control.write_text('fail')
+        with self.assertRaisesRegex(RuntimeError, 'checks failed'):
+            self.engine.verify('batch', 'a PASS claim cannot override the exit status')
+        with self.assertRaisesRegex(RuntimeError, '[Vv]erif'):
+            self.engine.publish('batch')
+
+    def test_verification_rejects_mixed_source_and_stale_or_missing_evidence(self):
+        self.engine.freeze('batch')
+        candidate = Path(self.engine.integrate('batch')['candidate'])
+        for mode in ('dirty', 'reverted'):
+            with self.subTest(mode=mode):
+                self.control.write_text(mode)
+                with self.assertRaisesRegex(RuntimeError, 'inputs changed'):
+                    self.engine.verify('batch', 'checks')
+                self.git(candidate, 'checkout', '--', 'base')
+        self.control.write_text('pass')
+        release = self.engine.verify('batch', 'checks')
+        receipt = Path(release['verification']['receipt'])
+        saved = receipt.read_text()
+        legacy = dict(release)
+        legacy.pop('verification')
+        atomic_json(self.engine.release_path('aaa-legacy'), legacy)
+        verification.require_commit(self.engine.state, release['commit'])
+        receipt.unlink()
+        with self.assertRaisesRegex(RuntimeError, 'evidence'):
+            verification.require_commit(self.engine.state, release['commit'])
+        with self.assertRaisesRegex(RuntimeError, 'evidence'):
+            self.engine.publish('batch')
+        receipt.write_text(saved)
+        log = Path(release['verification']['log'])
+        original = log.read_bytes()
+        log.write_bytes(b'changed log')
+        with self.assertRaisesRegex(RuntimeError, 'evidence'):
+            self.engine.publish('batch')
+        log.write_bytes(original)
+        with patch.dict(os.environ, {'T3CODE_THREAD_ID': 'different-caller'}):
+            verification.validate(release)
+        with patch.dict(os.environ, {'NODE_OPTIONS': '--no-warnings'}):
+            with self.assertRaisesRegex(RuntimeError, 'inputs changed'):
+                self.engine.publish('batch')
+        (candidate / '.env').write_text('CHANGED=1')
+        with self.assertRaisesRegex(RuntimeError, 'uncommitted|inputs changed'):
             self.engine.publish('batch')
 
     def test_withdrawal_and_duplicate_identity_are_explicit(self):
