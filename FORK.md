@@ -86,7 +86,10 @@ changed active turn cancels that pending shortcut. Preserve the editor-local
 routing in `composer-logic.ts`, `chat/composerCommandKey.ts`, `ChatComposer.tsx`
 and `ChatView.tsx`, and the selection/acknowledgement handling in
 `chat/QueuedRunsControl.tsx`. Keep nonempty submissions and the existing
-Mod+Shift+Enter first-queued-message shortcut unchanged. Web, desktop, and
+Mod+Shift+Enter first-queued-message shortcut unchanged. Holding Mod in an empty
+composer with queued messages shows the send arrow in place of Stop; releasing
+it restores Stop. Preserve this feedback in `ComposerPrimaryActions.tsx` and its
+callback wiring through `ComposerFooterControls.tsx`. Web, desktop, and
 embedded side chats share this path; native mobile keeps its existing controls.
 Verify with:
 

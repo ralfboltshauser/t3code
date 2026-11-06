@@ -468,7 +468,7 @@ export interface ChatComposerProps {
     dispatchMode?: ComposerDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
   ) => void;
-  onSendLatestQueuedMessage?: () => void;
+  onSendLatestQueuedMessage?: (() => void) | undefined;
   onResume: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
@@ -2213,6 +2213,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const expandMobileComposerStable = useStableCallback(expandMobileComposer);
 
+  const canSendQueuedMessage =
+    canOperateThread &&
+    !isSendDisabled &&
+    !environmentUnavailable &&
+    !isEditingQueuedMessage &&
+    pendingUserInputs.length === 0 &&
+    pendingApprovals.length === 0 &&
+    !showPlanFollowUpPrompt &&
+    !composerDraftHasUserContent(composerDraft) &&
+    !pendingDraftWork.has(attachmentTargetKey) &&
+    countPreparingComposerImages(attachmentTargetKey) === 0;
+
   const onComposerCommandKey = (key: string, event: KeyboardEvent, isTaskItem?: boolean) =>
     composerCommandKeyHandler({
       keybindings,
@@ -2221,16 +2233,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       phase,
       isCompacting,
       isComposerEmpty:
-        canOperateThread &&
-        !isSendDisabled &&
-        !environmentUnavailable &&
-        !isEditingQueuedMessage &&
-        pendingUserInputs.length === 0 &&
-        pendingApprovals.length === 0 &&
-        !showPlanFollowUpPrompt &&
-        !composerDraftHasUserContent(getComposerDraft(composerDraftTarget)) &&
-        !pendingDraftWork.has(attachmentTargetKey) &&
-        countPreparingComposerImages(attachmentTargetKey) === 0,
+        canSendQueuedMessage && !composerDraftHasUserContent(getComposerDraft(composerDraftTarget)),
       onSendLatestQueuedMessage: () => onSendLatestQueuedMessage?.(),
       followUpBehavior,
       isSoftwareKeyboardOpen,
@@ -3569,6 +3572,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     preserveComposerFocusOnPointerDown={isMobileViewport}
                     isEditingQueuedMessage={isEditingQueuedMessage}
                     onSubmitMessage={handleSubmitMessageStable}
+                    onSendLatestQueuedMessage={
+                      canSendQueuedMessage ? onSendLatestQueuedMessage : undefined
+                    }
                     onResume={onResume}
                     onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                     onInterrupt={handleInterruptPrimaryActionStable}
