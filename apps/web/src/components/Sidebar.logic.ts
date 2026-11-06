@@ -890,6 +890,18 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   return "ready";
 }
 
+export function isSidebarReadThread(
+  thread: ThreadStatusInput & SidebarThreadStatusInput,
+  wokeAt: string | null = null,
+) {
+  return (
+    resolveSidebarThreadStatus(thread) === "ready" &&
+    !thread.hasActionableProposedPlan &&
+    !hasUnseenCompletion(thread) &&
+    (wokeAt === null || Date.parse(thread.lastVisitedAt ?? "") >= Date.parse(wokeAt))
+  );
+}
+
 export function resolveSidebarFolderSummary(
   threads: ReadonlyArray<ThreadStatusInput & SidebarThreadStatusInput>,
 ) {
@@ -967,21 +979,28 @@ export function resolveSidebarProjectFolder<
 >(input: {
   readonly threads: readonly T[];
   readonly workingKeys: ReadonlySet<string>;
+  readonly readKeys?: ReadonlySet<string>;
+  readonly readExpanded?: boolean;
   readonly collapsed: boolean;
   readonly workingExpanded: boolean;
   readonly routeThreadKey: string | null;
 }) {
   const threads: T[] = [];
   const workingThreads: T[] = [];
+  const readThreads: T[] = [];
+  let readCount = 0;
   const hiddenThreads: T[] = [];
   let workingCount = 0;
   for (const thread of input.threads) {
     const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
     const working = input.workingKeys.has(key);
+    const read = !working && (input.readKeys?.has(key) ?? false);
     if (working) workingCount++;
+    if (read) readCount++;
     const visible =
-      key === input.routeThreadKey || (!input.collapsed && (!working || input.workingExpanded));
-    if (visible) (working ? workingThreads : threads).push(thread);
+      key === input.routeThreadKey ||
+      (!input.collapsed && (working ? input.workingExpanded : read ? input.readExpanded : true));
+    if (visible) (working ? workingThreads : read ? readThreads : threads).push(thread);
     else if (input.collapsed) hiddenThreads.push(thread);
   }
   return {
@@ -989,6 +1008,9 @@ export function resolveSidebarProjectFolder<
     workingThreads,
     hiddenThreads,
     workingCount,
+    readThreads,
+    readCount,
+    showReadHeader: !input.collapsed && readCount > 0,
     showWorkingHeader: !input.collapsed && workingCount > 0,
   };
 }

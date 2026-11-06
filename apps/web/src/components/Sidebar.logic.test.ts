@@ -33,6 +33,7 @@ import {
   resolveSidebarDropVerb,
   groupSidebarThreadsByProject,
   resolveSidebarProjectFolder,
+  isSidebarReadThread,
   resolveSidebarFolderSummary,
   sidebarFolderExpansionKeys,
 } from "./Sidebar.logic";
@@ -1626,6 +1627,52 @@ describe("resolveSidebarProjectFolder", () => {
     });
     expect(ids(returned.threads)).toEqual(["ready", "running", "other"]);
     expect(returned.showWorkingHeader).toBe(false);
+  });
+});
+
+describe("read project threads", () => {
+  it("keeps unread completions and attention outside Read and follows read state reversibly", () => {
+    const thread = makeThreadFixture({ runtime: null, lastVisitedAt: "2026-03-09T10:00:00.000Z" });
+    expect(isSidebarReadThread(thread)).toBe(true);
+    expect(isSidebarReadThread(thread, "2026-03-09T10:01:00.000Z")).toBe(false);
+    expect(isSidebarReadThread(thread, "2026-03-09T09:59:00.000Z")).toBe(true);
+    for (const change of [
+      { hasPendingApprovals: true },
+      { hasPendingUserInput: true },
+      { pendingGuestMessageCount: 1 },
+      { hasActionableProposedPlan: true },
+    ])
+      expect(isSidebarReadThread({ ...thread, ...change })).toBe(false);
+    const completed = {
+      ...thread,
+      latestRun: makeLatestRun({ completedAt: "2026-03-09T10:05:00.000Z" }),
+    };
+    expect(isSidebarReadThread(completed)).toBe(false);
+    expect(isSidebarReadThread({ ...completed, lastVisitedAt: "2026-03-09T10:06:00.000Z" })).toBe(
+      true,
+    );
+    const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+    const resolve = (
+      readExpanded: boolean,
+      routeThreadKey: string | null = null,
+      collapsed = false,
+    ) =>
+      resolveSidebarProjectFolder({
+        threads: [thread],
+        workingKeys: new Set<string>(),
+        readKeys: new Set([key]),
+        workingExpanded: false,
+        readExpanded,
+        collapsed,
+        routeThreadKey,
+      });
+    expect(resolve(false).readThreads).toEqual([]);
+    expect(resolve(false).readCount).toBe(1);
+    expect(resolve(false).showReadHeader).toBe(true);
+    expect(resolve(true).readThreads).toEqual([thread]);
+    expect(resolve(false, key).readThreads).toEqual([thread]);
+    expect(resolve(false, key, true).showReadHeader).toBe(false);
+    expect(resolve(false, null, true).hiddenThreads).toEqual([thread]);
   });
 });
 
