@@ -85,6 +85,7 @@ vi.mock("../../components/ui/Button", () => ({
     </button>
   ),
 }));
+vi.mock("../profiles/SidebarProfiles", () => ({ MobileSidebarProfiles: () => null }));
 vi.mock("./components/SettingsScreen", () => ({ SettingsScreen: Children }));
 vi.mock("./components/SettingsEnvironmentFilterHeader", () => ({
   useSettingsEnvironmentMenu: () => ({
