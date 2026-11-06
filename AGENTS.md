@@ -1,8 +1,11 @@
 # T3 Code
 
 For this personal fork, read `FORK.md` first. It routes feature, upstream-merge
-and deployment work to project-local skills and the operations guide. Keep all
-fork changes on `personal`; `main` remains an upstream mirror.
+and deployment work to project-local skills and the operations guide. Integrate fork changes on `personal`; independent feature threads develop in
+worktrees via `t3-fork-feature` and finish ready, without releasing. Side chats
+share the parent's feature. Explicit "merge and build" / release requests use
+`t3-fork-release`; daily maintenance only inspects upstream. `main` remains an
+upstream mirror.
 
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity, Kiro) and serves web, desktop, and mobile clients.
 

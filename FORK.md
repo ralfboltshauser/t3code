@@ -1,7 +1,7 @@
 # Ralf's T3 Code
 
-The root of this repository is the product fork. Build personal features and
-maintain its skills/tooling on `personal`. `main` follows `pingdotgg/t3code:main`
+The root of this repository is the product fork. Integrate personal features and
+maintain its skills/tooling on `personal`; develop independent features in worktrees. `main` follows `pingdotgg/t3code:main`
 without personal commits; connect upstream history through ordinary merges.
 
 Fetch `origin personal` and inspect status/history before starting work. Preserve
@@ -13,7 +13,28 @@ Git or a worktree instead of switching the canonical checkout to `main`.
 Use `.agents/skills/t3-fork-feature/SKILL.md` for feature work and
 `.agents/skills/t3-fork-upstream/SKILL.md` for upstream integration.
 
+Feature work follows `t3-fork-feature` and ends ready on a pushed feature branch.
+Only an explicit `t3-fork-release` / "merge and build" request gathers ready
+features plus upstream and stages a release. Side chats share their parent's
+feature. Daily maintenance inspects upstream without publishing.
+
 ## Intentional differences
+
+New independent threads default to worktrees based on fetched `personal` through
+`t3.json`'s `defaultThreadEnvMode` and `defaultWorktreeBaseRef`. Explicit dependency
+branches and side-chat workspace inheritance remain available. Preserve base
+selection in web `useHandleNewThread.ts` and mobile
+`new-task-context-presentation.ts`, including native pending-draft presentation.
+Feature readiness, frozen dependency-ordered release inputs and cleanup guards
+live in `scripts/personal-fork/workflow.py`; all-host build/cutover stays in
+`manage.py`. Shared readiness tags allow cross-clone discovery. Never restore
+per-feature automatic publication or scheduled daily releases.
+Verify with:
+
+```sh
+python3 -m unittest discover -s scripts/personal-fork -p 'test_*.py'
+vp test run packages/shared/src/t3ProjectFile.test.ts apps/web/src/hooks/useHandleNewThread.test.ts apps/mobile/src/features/threads/new-task-context-presentation.test.ts apps/mobile/src/state/pending-new-tasks-model.test.ts
+```
 
 Embedded side chats share their host panel's F6 stop and per-tab focus history.
 Their conversation and composer remain labelled regions, without registering
@@ -121,8 +142,8 @@ cannot silently restore them.
 
 ## Maintenance and installation
 
-Read [the operations guide](docs/operations/personal-fork.md) for daily upstream
-integration, weekly decisions and all-host deployment. `.t3-fork/` is ignored
+Read [the operations guide](docs/operations/personal-fork.md) for explicit batched releases, daily upstream
+inspection, weekly decisions and all-host deployment. `.t3-fork/` is ignored
 installation-local configuration and runtime state, not product source.
 The old Ubuntu sync timer is superseded; `scripts/personal-sync.sh` is a guard
 that refuses to run the obsolete nested-agent workflow.

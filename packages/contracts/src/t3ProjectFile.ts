@@ -90,6 +90,15 @@ export const T3ProjectFile = Schema.Struct({
         'Where new threads start for this repository: "worktree" for a fresh git worktree, "local" for the current checkout. A per-project setting in T3 Code overrides this; when neither is set, the global default applies.',
     }),
   ),
+  defaultWorktreeBaseRef: Schema.optionalKey(
+    trimmedNonEmpty(
+      {
+        description:
+          "Default branch for new worktrees when no branch was chosen. Clients fetch its origin revision before creating the worktree; explicit branch choices take precedence.",
+      },
+      T3_PROJECT_FILE_PATH_MAX_LENGTH,
+    ),
+  ),
   worktreeSubmodules: Schema.optionalKey(
     WorktreeSubmodules.annotate({
       description:

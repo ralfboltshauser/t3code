@@ -404,6 +404,7 @@ export function NewTaskFlowProvider(
       selection,
       canChooseWorkspace,
       defaultMode: defaultWorkspaceMode,
+      defaultWorktreeBaseRef: projectDefaults.defaultWorktreeBaseRef,
       defaultModeSettled: projectDefaults.defaultWorkspaceModeSettled,
       isGitRepo,
       branches: allBranchRefs,
@@ -418,7 +419,10 @@ export function NewTaskFlowProvider(
   // value keeps tracking the server setting when the config loads late.
   const draftStartFromOrigin = selectedProjectDraft.workspaceSelection?.startFromOrigin;
   const startFromOrigin =
-    isGitRepo && (draftStartFromOrigin ?? projectSettings.settings.newWorktreesStartFromOrigin);
+    isGitRepo &&
+    (draftStartFromOrigin ??
+      (projectDefaults.defaultWorktreeBaseRef !== null ||
+        projectSettings.settings.newWorktreesStartFromOrigin));
   const defaultRuntimeMode = projectSettings.settings.defaultRuntimeMode;
   const managedPolicy = selectedEnvironmentServerConfig?.managedPolicy;
   const runtimeMode = resolveNewThreadRuntimeMode(

@@ -87,17 +87,25 @@ def status():
     return result
 
 
+def pending_release(commit):
+    if (STATE / "deployment.json").exists():
+        raise RuntimeError("Resolve the previous deployment journal before staging")
+    path = STATE / "pending.json"
+    previous = json.loads(path.read_text()) if path.exists() else None
+    if previous and previous["commit"] != commit:
+        try:
+            run("git", "-C", str(ROOT), "merge-base", "--is-ancestor", previous["commit"], commit)
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError("Queued release is not an ancestor; reconcile it before replacement") from error
+    return previous
+
+
 def stage(commit):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Supply a full 40-character source commit")
     with locked("release"):
-        if (STATE / "deployment.json").exists():
-            raise RuntimeError("Resolve the previous deployment journal before staging")
         pending = STATE / "pending.json"
-        if pending.exists():
-            previous = json.loads(pending.read_text())
-            if previous["commit"] != commit:
-                raise RuntimeError("A different release is already queued; resolve it first")
+        previous = pending_release(commit)
         config = inventory()
         # Establish reachability before doing expensive builds. Busy hosts may build safely.
         for host in config["hosts"]:
@@ -131,6 +139,9 @@ def stage(commit):
         for host in config["hosts"]:
             if not host_call(host, "probe", commit)["target_ready"]:
                 raise RuntimeError("A host has no verified staged artifact")
+        if previous and previous["commit"] != commit:
+            atomic_json(STATE / "superseded" / (previous["commit"] + ".json"), previous)
+            (STATE / "idle-observation.json").unlink(missing_ok=True)
         atomic_json(pending, {"commit": commit, "inventory_sha256": fingerprint(config), "queued_at": now()})
         print(f"Queued {commit} for all {len(config['hosts'])} hosts; installation waits for idle.")
 

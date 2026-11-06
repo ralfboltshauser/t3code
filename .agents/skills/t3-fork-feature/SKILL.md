@@ -1,6 +1,6 @@
 ---
 name: t3-fork-feature
-description: Implement personal T3 Code features and fixes from this maintenance project, choosing integration points that preserve upstream mergeability and delivering through the all-host release workflow.
+description: Implement personal T3 Code features and fixes from this maintenance project, in isolated worktrees, preserve upstream mergeability, and leave checked feature branches ready for an explicit batched release.
 ---
 
 # Implement a fork feature
@@ -11,13 +11,43 @@ skills/scripts on `personal`; `main` remains an upstream mirror. Use
 `python3 scripts/personal-fork/manage.py paths` to locate the canonical checkout
 and its shared, ignored `.t3-fork/` state from any worktree.
 
+## Attach and register the feature
+
+Independent feature threads use a worktree from fetched `origin/personal`, never
+the canonical checkout or `main`. Choose a stable lowercase feature ID before
+editing and inspect this thread's workspace with `t3_worktree_status`. If rooted,
+use `t3_worktree_handoff` with `branch: "personal-feature-ID"`, `baseRef: "personal"`,
+`startFromOrigin: true` and a continuation prompt naming this skill and feature ID;
+call it last, then
+continue in the returned workspace next turn. Do not create another top-level
+thread. For an explicitly stacked feature use the dependency's committed branch
+and `startFromOrigin: false`.
+
+A side chat shares the parent's feature, worktree and readiness. Do not register
+or publish it separately. Coordinate edits with the parent and report completion;
+the parent marks the combined feature ready only after all writers finish.
+
+For an independent feature, choose a stable lowercase ID, then run from its worktree:
+
+```sh
+python3 scripts/personal-fork/workflow.py register FEATURE --summary "User-visible outcome" --thread THREAD_ID
+```
+
+Use `--depends FEATURE` for each prerequisite. Dependencies must be registered in
+this clone when registering a stack; inspect remote ready records before adopting
+cross-machine work. Never overwrite an existing registration. Existing worktrees
+are not implicitly ready. The default UI is worktree/personal through `t3.json`;
+agent-launched feature threads still need an explicit worktree workspaceStrategy.
+Analysis and release threads may remain rooted.
+
 ## Establish the actual baseline
 
 1. At the repository root, inspect status, remotes and history, then fetch `origin personal`
    explicitly. Pin its full SHA. An installed build or old checkout is not the
    current feature baseline. Preserve unfinished files, commits and worktrees;
-   start independent work in a sibling source worktree from the pinned commit
-   when this checkout is dirty, behind or busy. Do not stash someone else's work.
+   use the independent thread's worktree from that pinned baseline. Existing
+   registered features stay in their workspace; do not replace a feature's
+   unfinished work because personal advanced. Never stash someone else's work.
 2. Read that candidate's `AGENTS.md`, `FORK.md` and
    `.agents/skills/t3-personal-fork/SKILL.md`. The latest manifest is authoritative
    for personal behavior; an older copy may claim there are no customizations.
@@ -95,8 +125,21 @@ Update the candidate's `FORK.md` intentional-differences section with:
 Keep this as the single behavior manifest; do not create a second feature ledger
 elsewhere. It is what detects semantic regressions after a clean merge.
 
-For a normal feature request here, finish delivery through
-[t3-fork-release](../t3-fork-release/SKILL.md), following the standing maintenance
-policy. Honor explicit prototype, review-only or code-only limits. Report what
-changed, preservation checks, the exact source commit, and whether release is
-staged, pending or verified on all hosts. A successful push is not installation.
+Finish by committing only settled feature changes and running:
+
+```sh
+python3 scripts/personal-fork/workflow.py ready FEATURE --checks "Commands run and actual results"
+```
+
+This pushes the feature branch and an exact-commit readiness marker. It does not
+publish to `personal`, build or install anything. Confirm no side chat or other
+writer is still changing this workspace before marking ready; release also checks
+persisted source activity. Report the feature ID, summary, checks, commit and
+"ready for the next release". Honor prototype/code-only limits: do not mark them
+ready without a finished implementation.
+
+To resume or exclude a ready feature, run `workflow.py withdraw FEATURE` before
+editing. Recheck and mark ready again when finished. A changed head invalidates
+readiness automatically, but withdrawal also excludes same-head work in progress.
+Only an explicit release request invokes
+[t3-fork-release](../t3-fork-release/SKILL.md).

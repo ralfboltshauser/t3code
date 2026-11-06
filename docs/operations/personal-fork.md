@@ -30,64 +30,102 @@ Missing configuration blocks release operations; examples are not a usable cohor
 `./update-personal.sh` builds the current pushed `personal` revision on all hosts
 and queues deployment. Host/configuration failures never narrow the cohort.
 
-## Feature requests
+## Feature development
 
-Use `.agents/skills/t3-fork-feature/SKILL.md` for baseline selection, integration
-seams, behavior verification and the `FORK.md` record. Normal feature requests
-include verified publication to `personal` and staging for all inventory hosts,
-following `t3-fork-release`. Respect explicit prototype, review-only or code-only
-limits. PR creation is outside this workflow.
+Independent feature threads start in worktrees from fetched `personal`; side chats
+share their parent's workspace and feature. `t3.json` sets worktree mode and the
+base ref. Project settings may override the mode, so remove an old explicit Local
+override in Project Defaults if new chats still start locally. Explicit branch
+choices support stacked work. Agent-created threads use an explicit worktree
+workspaceStrategy; release/inspection threads stay rooted.
 
-## Daily integration — 21:00 Europe/Zurich
+Use `t3-fork-feature` for implementation. It registers a feature, verifies it and
+pushes its feature branch plus an exact-commit `t3-ready/ID/SHA` annotated tag.
+These tags make readiness discoverable across clones; they are operational
+metadata, not a second behavior manifest. A source host must be in the release
+inventory for its activity to be verified. Feature completion does not publish to
+`personal` or stage a release. Side chats cannot mark the shared feature ready
+independently. To resume a ready feature, withdraw readiness before editing.
 
-Daily and weekly triggers are bound to a root maintenance thread. Unbound T3 tasks
-currently default to a worktree of `main`, which lacks personal tooling; avoid
-that default here. T3 must be running and the Mac awake. Fixed-time occurrences
-more than ten minutes late are skipped, not caught up later.
+From the feature worktree:
 
-1. Read canonical `.t3-fork/state/decisions.md`, any deployment journal, and live
-   status. Recover an incomplete cutover before another release. Acquire
-   `python3 scripts/personal-fork/manage.py lock-run` in a persistent tool terminal
-   (`tty: true`); hold its stdin open and release by EOF. Defer if already locked.
-2. Fetch `origin personal` and `origin main` explicitly. Configure/fetch upstream
-   from the inventory URL. Pin personal and upstream SHAs. Advance origin's
-   `main` only by a normal fast-forward push when it is an upstream ancestor.
-3. Preserve blocked candidates and recorded unresolved product questions.
-   Otherwise create a sibling candidate from pinned `origin/personal`. Work
-   directly in this T3 turn: nested CLI agents previously failed with read-only
-   Git metadata. Delegate only when Ralf asks.
-4. Follow `.agents/skills/t3-fork-upstream/SKILL.md`. Read the candidate's current
-   manifest, trace EVERY customization against upstream changes, and perform an
-   ordinary merge of the pinned upstream SHA. Repair mechanical conflicts while
-   preserving personal intent and upstream correctness/security fixes.
-5. For semantic overlap or ambiguous behavior, record candidate path, pinned
-   refs, source evidence, choices and recommendation in canonical
-   `.t3-fork/state/decisions.md`. Retain the candidate and defer product questions
-   to the weekly review. Routine infrastructure failures may be repaired directly.
-6. Run applicable customization checks and `vp run check:changed` against the
-   pinned personal base. On macOS, set `GIT_CONFIG_GLOBAL=/dev/null` and use a
-   short `TMPDIR` on a case-sensitive scratch volume outside any repository:
-   Linux fixtures need case-only filenames, executable fixtures must not inherit
-   the repo's module type, and packaging probes reject ancestor `node_modules`.
-   Allow a longer batch `--timeout` for large integrations; per-test limits stay
-   unchanged. Follow source testing rules; CI owns repo-wide suites.
-   Commit checked repairs/merge, verify both parents are ancestors and the tree
-   is clean, then normally push to `personal`. Reconcile concurrent advances;
-   force pushes are outside this workflow.
-7. Even with no new upstream commits, compare the checked published personal
-   revision to installed state. New personal features also need deployment.
-   Run `python3 scripts/personal-fork/manage.py stage FULL_SHA` when needed.
-   Finish the turn so the independent worker can observe the cohort idle.
-8. Write refs, preservation review, check results and actual published/staged/
-   pending/deployed state to `.t3-fork/state/last-run.md`. Daily runs do not open
-   question threads/notifications or repeatedly redo the same blocked attempt.
+```sh
+python3 scripts/personal-fork/workflow.py register FEATURE --summary "Outcome" --thread THREAD_ID
+python3 scripts/personal-fork/workflow.py ready FEATURE --checks "Commands and actual results"
+python3 scripts/personal-fork/workflow.py withdraw FEATURE
+```
+
+Register prerequisites with repeated `--depends FEATURE`. Explicit stacks must
+contain the dependency's committed work. Preserve existing unknown worktrees;
+register them only after inspecting their baseline, ownership and actual state.
+Do not mark them ready merely because the agent's previous turn ended.
+
+## Explicit releases
+
+Ask `t3-fork-release` to release all ready features plus upstream. Hold
+`manage.py lock-run` in a persistent tty through integration/publication. The
+coordinator serializes state writes separately and stores resumable snapshots in
+canonical `.t3-fork/state/releases/`. A snapshot freezes exact inputs, so newly
+ready features wait for the next release. The candidate ordinary-merges features
+in dependency order, then upstream. Review EVERY `FORK.md` behavior and interactions
+between features; mechanical conflict repair is autonomous, product ambiguity is
+recorded in `state/decisions.md`. Preserve blocked candidates.
+
+```sh
+python3 scripts/personal-fork/workflow.py list
+python3 scripts/personal-fork/workflow.py freeze RELEASE_ID
+python3 scripts/personal-fork/workflow.py integrate RELEASE_ID
+# Check the returned candidate, including check:changed against its pinned personal.
+python3 scripts/personal-fork/workflow.py verify RELEASE_ID --checks "Actual results"
+python3 scripts/personal-fork/workflow.py publish RELEASE_ID
+python3 scripts/personal-fork/workflow.py stage RELEASE_ID
+python3 scripts/personal-fork/workflow.py report RELEASE_ID
+```
+
+Start with `workflow.py finalize` to finish cleanup of earlier installed releases;
+a verified newer cohort containing that release also qualifies. Use a unique
+lowercase release ID. `verify` records evidence; it does not run the
+checks for the agent. Publication rejects a changed candidate or concurrent
+`personal` advance. Reconcile and reverify rather than force pushing. Builds run
+once per host from the exact published result. The normal release request covers
+publication/staging and eligible cleanup, without a separate confirmation step.
+Analysis and prototype requests do not authorize a release.
+
+Finish the staging turn so the worker can deploy when all hosts are idle. On a
+later release-status/finalize request, inspect live status, run
+`workflow.py cleanup RELEASE_ID`, then `workflow.py report RELEASE_ID`. The report
+lists included features, excluded work, checks, commit and cleanup outcomes. Add
+upstream highlights and per-host live state to the human handoff.
+
+Cleanup requires that every inventoried host runs the exact release. It protects
+changed branches, dirty workspaces and T3 ownership. Chat-owned worktrees are
+retired through T3's Storage cleanup; a Git script never removes a directory
+behind a resumable chat. An orphan source may be removed only with no runtime or
+workspace processes. Unknown activity defers removal. Source cleanup runs on its
+owning machine, with exact-head checks and compare-and-delete refs. Conditional
+deletes may use a SHA lease; rewriting `personal` or `main` remains prohibited.
+Retained work is reported with the reason, not called cleaned. Build caches and
+backups are outside feature-worktree cleanup.
+
+`./update-personal.sh` remains a low-level way to stage already-published personal;
+it does not gather features or merge upstream. Prefer the release skill.
+
+## Daily upstream inspection — 21:00 Europe/Zurich
+
+The daily task only fetches `origin personal` and `upstream main`, records exact
+refs and a concise summary in canonical `state/last-inspection.md`, and preserves
+all feature/release state. It does not merge, commit, push, build, stage, clean up
+or restart hosts. Acquire the integration lock for the shared report write. No
+daily notifications or new review threads. The weekly decision review remains.
+
+Schedules are bound to the root maintenance thread. T3 must be running and the
+Mac awake; fixed-time occurrences more than ten minutes late are skipped.
 
 ## Weekly decisions — Sunday 21:00 Europe/Zurich
 
 Read the queue, deployment journal, latest result and `state/weekly-review.json`
 under canonical `.t3-fork/`. Reads need no integration lock. If no product or
-recovery decision needs Ralf, finish quietly. Mechanical repair belongs to the
-daily flow.
+recovery decision needs Ralf, finish quietly. Mechanical repair belongs to an interactive maintenance turn.
 
 For unresolved decisions, reuse an unanswered review or open one foreground T3
 thread in this project with root workspace, source evidence, choices,
@@ -102,7 +140,10 @@ messages to other people; avoid duplicate interactive reviews.
 ## Deployment and recovery
 
 `stage FULL_SHA` verifies publication on `personal`, builds immutable artifacts
-for every host, and writes `state/pending.json` only after all pass. Install the
+for every host, and writes `state/pending.json` only after all pass. A queued
+ancestor revision may be superseded under the release lock before cutover; its
+record is archived and idle observations reset. Divergent queues or a cutover
+journal block replacement. Failed builds leave the existing queue intact. Install the
 logged-in Mac's worker with `python3 scripts/personal-fork/install-worker.py`;
 it invokes `deploy` every five minutes while the Mac is awake and logged in.
 

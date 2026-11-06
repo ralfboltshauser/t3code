@@ -1,58 +1,79 @@
 ---
 name: t3-fork-release
-description: Publish checked personal T3 Code changes and stage the same source revision for every inventoried host, or inspect and recover a coordinated release without interrupting known active work.
+description: Release ready personal T3 features together with upstream updates, or resume/report their all-host deployment and safe cleanup. Use for merge and build, merge and publish, release everything ready, and release status.
 ---
 
-# Deliver one revision to the host cohort
+# Release ready features
 
-Read [the operations guide](../../../docs/operations/personal-fork.md) and the
-canonical checkout's ignored `.t3-fork/hosts.json`; they own installation paths,
-required hosts and recovery policy. Run `python3 scripts/personal-fork/manage.py paths`
-from any worktree to locate shared state. Missing local configuration blocks
-deployment; examples are not a usable host inventory. Read current scripts when
-their behavior matters; a prior agent report is not live host evidence.
+Read [the operations guide](../../../docs/operations/personal-fork.md). An explicit
+release request authorizes normal publication, all-inventory staging and guarded
+cleanup of included features. Feature completion alone does not authorize release.
+Never create PRs or force-update `personal`/`main`. Missing hosts remain required.
 
-## Publish and stage
+Use canonical shared state (`manage.py paths`), not a worktree-local controller.
+Keep this thread rooted; merges happen in the coordinator's candidate worktree.
+Acquire `manage.py lock-run` in a persistent tty, hold stdin open through integration
+and publication, and release by EOF. Read `manage.py status`, existing release JSON
+and any deployment journal first. Run `workflow.py finalize` to finish eligible
+cleanup from prior releases and report retained work. An incomplete cutover needs
+recovery, not a new release. Use the coordinator from the latest canonical source; do not trust an old
+worktree's skill or script over newer published instructions.
 
-1. Inspect `python3 scripts/personal-fork/manage.py status` and any deployment journal.
-   Resolve an incomplete cutover before queuing another release. Include every
-   inventory host; an unreachable machine remains required.
-2. For an authorized feature/integration delivery, verify the intended source
-   commit is clean and has the required check results. Fetch `origin personal`
-   and reconcile concurrent work without overwriting it. Normally push the
-   checked result to `personal`; force pushes and PR creation are outside this
-   workflow. The product's `main` remains an upstream mirror. Both product changes and maintenance tooling belong on `personal`.
-3. Pin the full published SHA and run
-   `python3 scripts/personal-fork/manage.py stage FULL_SHA`. This builds and verifies the
-   whole cohort before queuing a cutover. Do not update just the machine on
-   which implementation happened. If a build fails, report that result and keep
-   the current installations; preserve failed artifacts for diagnosis.
-4. Finish the T3 turn after staging. The independent launchd worker waits for
-   the cohort to be idle; restarting the host from the agent would interrupt the
-   very session preparing the release. Open terminals or resident subprocesses
-   can conservatively defer deployment. Never terminate them to clear the guard.
+## Freeze, integrate and check
 
-Existing maintenance authorization covers the normal publication and staging
-flow. An analysis, prototype or explicitly code-only request does not authorize
-delivery. Keep source publication and live installation as distinct outcomes.
+```sh
+python3 scripts/personal-fork/workflow.py list
+python3 scripts/personal-fork/workflow.py freeze RELEASE_ID
+python3 scripts/personal-fork/workflow.py integrate RELEASE_ID
+```
 
-## Report or recover the actual state
+Use a unique lowercase release ID. `list` fetches cross-machine ready markers,
+checks exact branch heads and source activity, and reports exclusions. Unregistered,
+dirty, active or stale features do not enter the batch. If a source is unreachable,
+report its excluded features; never infer readiness from a branch name or chat title.
+`freeze` pins personal, upstream and ready dependency order. New ready work waits
+for the next release. Inspect exclusions and unresolved decisions before proceeding;
+never silently choose product semantics or omit a requested dependency.
 
-Report the exact SHA and distinguish checked, published, staged, pending and
-verified deployed. Claim deployment only after live status shows ALL required
-hosts running that source revision and the cohort verification succeeded;
-matching marketing version strings are insufficient.
+`integrate` creates/resumes a sibling candidate and ordinary merges. On conflict,
+inspect the preserved candidate, resolve mechanical conflicts, commit and resume.
+Follow [t3-fork-upstream](../t3-fork-upstream/SKILL.md) for EVERY `FORK.md` behavior,
+including clean merges. Compare features with one another too. Queue ambiguous
+product choices in canonical decisions.md and preserve the candidate.
 
-The worker owns idle checks, staged artifacts, stopped-state backups, pointer
-changes and health verification. Do not bypass it with direct app replacement,
-service restarts, changes to the live SQLite database, or removal of an inventory
-host. A failure journal stops retries because recovery depends on which steps
-actually happened.
+Run candidate instructions, manifest checks, focused interaction tests and
+`vp run check:changed PERSONAL_SHA`. Perform the required integrated client pass.
+Record real commands/results, not a generic claim that checks passed. Then:
 
-For recovery, inspect the recorded phase and each host before changing anything.
-The worker can restore old binaries only before any new server has started.
-After a new server starts, treat its database as potentially migrated: old
-binaries may no longer be compatible. Follow the canonical recovery procedure,
-keep all host states accounted for, and obtain Ralf's decision before restoring
-data or changing accepted behavior. Preserve the journal until recovery is
-verified; clearing it is not a repair.
+```sh
+python3 scripts/personal-fork/workflow.py verify RELEASE_ID --checks "Commands and actual results"
+python3 scripts/personal-fork/workflow.py publish RELEASE_ID
+python3 scripts/personal-fork/workflow.py stage RELEASE_ID
+python3 scripts/personal-fork/workflow.py report RELEASE_ID
+```
+
+`publish` rejects a changed candidate or a concurrent personal advance. Merge new
+personal into the candidate, inspect interactions and reverify; never overwrite it.
+`stage` builds the exact published commit everywhere. An ancestor pending revision
+can be superseded under the release lock before cutover; divergent queues or any
+cutover journal block it. Failed builds preserve the prior queue/installations.
+Release the integration lock and end the turn after staging; the independent
+worker owns shutdown, stopped-state backups, cutover and health checks.
+
+## Resume, clean and report
+
+For a status/resume request, read the existing release record and live status;
+do not freeze another batch or repeat already successful checks without cause.
+After ALL inventory hosts run the exact commit, run `workflow.py cleanup RELEASE_ID`
+and `workflow.py report RELEASE_ID`. It never deletes unrelated/unincluded branches,
+advanced/dirty workspaces or a workspace still owned by T3. Runtime/process ownership
+that cannot be proved safe defers deletion. Use T3's existing Storage cleanup to
+retire chat-owned workspaces; do not write live SQLite or remove directories behind
+resumable threads. Remote cleanup runs on the source machine after inspection.
+Conditional ref deletion uses an expected SHA; this is not permission to rewrite
+branch history. Preserve readiness/release records so included commits stay traceable.
+
+Report user-visible features, upstream range/highlights, checks/limits, exact source
+SHA, per-host staged/pending/verified state, removed branches/worktrees and every
+retained item with its reason. Link the generated Markdown report. A staged build
+is not an installed release. Do not restart the host to finish your own task.

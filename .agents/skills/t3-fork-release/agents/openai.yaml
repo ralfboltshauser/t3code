@@ -1,3 +1,3 @@
 interface:
   display_name: "T3 Fork Release"
-  short_description: "Stage and verify one revision across every host"
+  short_description: "Merge ready features and upstream, build, deploy and report cleanup"

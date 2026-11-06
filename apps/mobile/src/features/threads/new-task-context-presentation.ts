@@ -120,6 +120,7 @@ export function filterNewTaskBranches<T extends { readonly name: string }>(
  */
 export function fillNewTaskWorkspaceBranch(input: {
   readonly selection: ComposerDraftWorkspaceSelection;
+  readonly defaultWorktreeBaseRef?: string | null;
   readonly branches: ReadonlyArray<{
     readonly name: string;
     readonly current: boolean;
@@ -134,6 +135,9 @@ export function fillNewTaskWorkspaceBranch(input: {
   if (selection.branch !== null) return selection;
   if (selection.mode === "worktree") {
     // The default may only exist as origin/<default>, so search remote refs too.
+    if (input.worktreeDefaultSettled && input.defaultWorktreeBaseRef) {
+      return { ...selection, branch: input.defaultWorktreeBaseRef, worktreePath: null };
+    }
     const base =
       input.branches.find((branch) => branch.isDefault) ??
       input.branches.find((branch) => !branch.isRemote && branch.current) ??
@@ -160,6 +164,7 @@ export function fillNewTaskWorkspaceBranch(input: {
  */
 export function resolveNewTaskDraftWorkspace(input: {
   readonly selection: ComposerDraftWorkspaceSelection | undefined;
+  readonly defaultWorktreeBaseRef?: string | null;
   readonly canChooseWorkspace: boolean;
   readonly defaultMode: WorkspaceMode;
   readonly defaultModeSettled: boolean;
@@ -175,7 +180,8 @@ export function resolveNewTaskDraftWorkspace(input: {
       isGitRepo: input.isGitRepo,
     }),
     branches: input.branches,
+    defaultWorktreeBaseRef: input.defaultWorktreeBaseRef,
     projectCwd: input.projectCwd,
-    worktreeDefaultSettled: selection?.mode !== undefined || input.defaultModeSettled,
+    worktreeDefaultSettled: input.defaultModeSettled,
   });
 }

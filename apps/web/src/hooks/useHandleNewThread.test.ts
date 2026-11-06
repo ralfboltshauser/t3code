@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import type { RuntimeMode } from "@t3tools/contracts";
+import type { RuntimeMode, T3ProjectFile } from "@t3tools/contracts";
 
 const testState = vi.hoisted(() => {
-  let completeProjectFileRead: (value: null) => void = () => undefined;
-  let projectFileRead = Promise.resolve<null>(null);
+  let completeProjectFileRead: (value: T3ProjectFile | null) => void = () => undefined;
+  let projectFileRead = Promise.resolve<T3ProjectFile | null>(null);
   let projectRemoved = false;
   let connectedEnvironmentIds = ["environment-primary", "environment-ssh"];
   let targetSettings = {
@@ -53,7 +53,7 @@ const testState = vi.hoisted(() => {
   };
 
   return {
-    completeProjectFileRead: (value: null) => completeProjectFileRead(value),
+    completeProjectFileRead: (value: T3ProjectFile | null) => completeProjectFileRead(value),
     draftStore,
     get projectFileRead() {
       return projectFileRead;
@@ -107,7 +107,7 @@ const testState = vi.hoisted(() => {
       draftStore.setDraftThreadContext.mockClear();
       draftStore.setLogicalProjectDraftThreadId.mockClear();
       draftStore.setPrompt.mockClear();
-      projectFileRead = new Promise<null>((resolve) => {
+      projectFileRead = new Promise<T3ProjectFile | null>((resolve) => {
         completeProjectFileRead = resolve;
       });
     },
@@ -320,6 +320,27 @@ describe.each([
 });
 
 describe("useNewThreadHandler", () => {
+  it("starts independent fork worktrees from personal and keeps an explicit dependency base", async () => {
+    for (const branch of [undefined, "dependency"]) {
+      testState.reset(null, { envMode: "worktree", startFromOrigin: false });
+      const pending = useNewThreadHandler()(
+        { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+        branch === undefined ? undefined : { branch },
+      );
+      testState.completeProjectFileRead({ defaultWorktreeBaseRef: "personal" });
+      await pending;
+      expect(testState.draftStore.setLogicalProjectDraftThreadId).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          branch: branch ?? "personal",
+          envMode: "worktree",
+          startFromOrigin: true,
+        }),
+      );
+    }
+  });
   it("keeps the text of a draft that gained some while it waited", async () => {
     testState.reset(null);
     const raced = {

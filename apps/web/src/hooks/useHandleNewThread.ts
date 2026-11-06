@@ -175,18 +175,22 @@ export function createNewThreadHandler(router: AnyRouter) {
           currentRouteTarget?.kind === "draft" ? currentRouteTarget.draftId : null,
         destinationDraftId,
       });
+    let configuredWorktreeBaseRef: string | null = null;
     const resolveDefaultEnvMode = async (): Promise<DraftThreadEnvMode> => {
       // Environment queries wait for a connection, so reading the project file on an
       // offline machine would never settle and the draft would never open.
       const consultProjectFile =
         project !== undefined &&
-        projectSettings.settings.defaultThreadEnvMode === null &&
+        (projectSettings.settings.defaultThreadEnvMode === null ||
+          projectSettings.settings.defaultThreadEnvMode === "worktree" ||
+          options?.envMode === "worktree") &&
         appAtomRegistry
           .get(environmentSummaries.connectedEnvironmentIdsAtom)
           .includes(project.environmentId);
       const projectFile = consultProjectFile
         ? await readT3ProjectFile(project.environmentId, project.workspaceRoot)
         : null;
+      configuredWorktreeBaseRef = projectFile?.defaultWorktreeBaseRef ?? null;
       return resolveNewThreadEnvMode({
         projectSettings: resolveProjectSettings(
           targetServerSettings,
@@ -274,12 +278,14 @@ export function createNewThreadHandler(router: AnyRouter) {
             return null;
           }
           workspaceContext = {
-            branch: null,
+            branch: defaultEnvMode === "worktree" ? configuredWorktreeBaseRef : null,
             worktreePath: null,
             envMode: defaultEnvMode,
             startFromOrigin: resolveNewDraftStartFromOrigin({
               envMode: defaultEnvMode,
-              newWorktreesStartFromOrigin: projectSettings.settings.newWorktreesStartFromOrigin,
+              newWorktreesStartFromOrigin:
+                configuredWorktreeBaseRef !== null ||
+                projectSettings.settings.newWorktreesStartFromOrigin,
             }),
           };
         }
@@ -369,7 +375,11 @@ export function createNewThreadHandler(router: AnyRouter) {
     const threadId = newThreadId();
     const createdAt = new Date().toISOString();
     return (async () => {
-      const initialEnvMode = options?.envMode ?? (await resolveDefaultEnvMode());
+      const initialEnvMode =
+        options?.envMode === "local"
+          ? "local"
+          : (options?.envMode ?? (await resolveDefaultEnvMode()));
+      if (options?.envMode === "worktree") await resolveDefaultEnvMode();
       if (abandonedSinceRequest()) {
         return null;
       }
@@ -398,14 +408,17 @@ export function createNewThreadHandler(router: AnyRouter) {
       setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, draftId, {
         threadId,
         createdAt,
-        branch: options?.branch ?? null,
+        branch:
+          options?.branch ?? (initialEnvMode === "worktree" ? configuredWorktreeBaseRef : null),
         worktreePath: options?.worktreePath ?? null,
         envMode: initialEnvMode,
         startFromOrigin:
           options?.startFromOrigin ??
           resolveNewDraftStartFromOrigin({
             envMode: initialEnvMode,
-            newWorktreesStartFromOrigin: projectSettings.settings.newWorktreesStartFromOrigin,
+            newWorktreesStartFromOrigin:
+              configuredWorktreeBaseRef !== null ||
+              projectSettings.settings.newWorktreesStartFromOrigin,
           }),
         runtimeMode: defaultRuntimeMode,
         ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),

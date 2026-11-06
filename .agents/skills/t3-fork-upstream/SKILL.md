@@ -5,7 +5,7 @@ description: Integrate upstream T3 Code changes into the personal fork while pre
 
 # Preserve the fork through an upstream merge
 
-Follow [the daily integration procedure](../../../docs/operations/personal-fork.md)
+Follow [the explicit release procedure](../../../docs/operations/personal-fork.md)
 for locking, pinned refs, candidates, checks, publication and release. From any
 worktree, `python3 scripts/personal-fork/manage.py paths` locates the canonical
 checkout and its ignored `.t3-fork/` state. Use the latest candidate's `FORK.md`
@@ -51,15 +51,18 @@ focused interaction regression when a newly discovered overlap warrants it;
 keep assertions that protect intent. Check wire and migration changes against
 the deployment procedure, not only local compilation. Verify both pinned
 parents remain ancestors of the checked result, and publish normally only
-after the daily procedure's gates pass.
+after the explicit release procedure's gates pass.
 
 When blocked, preserve the candidate and record its path, pinned refs, relevant
 source evidence, choices, recommendation and check results in canonical
-`.t3-fork/state/decisions.md`. Daily runs defer these questions to the weekly review;
+`.t3-fork/state/decisions.md`. Scheduled inspections never merge or publish;
 an interactive session may ask its user directly. Mechanical failures such as
 the old nested CLI's read-only Git metadata are repair work, not product
 decisions. Work directly in the authorized T3 turn instead of recreating that
 nested launcher.
 
-Finish through [t3-fork-release](../t3-fork-release/SKILL.md) when a checked
-release is ready. Keep integration success distinct from deployment success.
+Upstream integration normally runs inside an explicitly requested
+[t3-fork-release](../t3-fork-release/SKILL.md) batch. A scheduled inspection only
+fetches and reports updates; it cannot publish, stage or restart. A standalone
+analysis or upstream preparation leaves its candidate unpublished unless Ralf
+explicitly requests a release. Keep integration success distinct from deployment.

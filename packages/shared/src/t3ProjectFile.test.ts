@@ -25,8 +25,9 @@ describe("parseT3ProjectFile", () => {
     expect(
       parseT3ProjectFile(`{
         /* See https://t3.codes/schema/t3.json */
-        "defaultThreadEnvMode": "worktree"
+        "defaultThreadEnvMode": "worktree",
+        "defaultWorktreeBaseRef": "personal"
       }`),
-    ).toEqual({ defaultThreadEnvMode: "worktree" });
+    ).toEqual({ defaultThreadEnvMode: "worktree", defaultWorktreeBaseRef: "personal" });
   });
 });

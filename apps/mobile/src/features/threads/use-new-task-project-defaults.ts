@@ -68,14 +68,13 @@ export function useNewTaskProjectDefaults(project: EnvironmentProject | null) {
         projectHasThreads,
       });
   // While t3.json loads, the environment default is provisional; t3.json may replace it.
-  const defaultWorkspaceModeSettled =
-    projectSettings.sources.defaultThreadEnvMode !== "environment" ||
-    (!t3ProjectFileQuery.isPending && !fileAccessPending);
+  const defaultWorkspaceModeSettled = !t3ProjectFileQuery.isPending && !fileAccessPending;
   return {
     serverConfig,
     isScratch,
     projectSettings,
     defaultWorkspaceMode,
     defaultWorkspaceModeSettled,
+    defaultWorktreeBaseRef: t3ProjectFile?.defaultWorktreeBaseRef ?? null,
   };
 }

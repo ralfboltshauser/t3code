@@ -164,6 +164,23 @@ describe("fillNewTaskWorkspaceBranch", () => {
     });
   });
 
+  it("uses the configured fork base while preserving explicit choices", () => {
+    expect(
+      fillNewTaskWorkspaceBranch({
+        ...base,
+        defaultWorktreeBaseRef: "personal",
+        selection: { mode: "worktree", branch: null, worktreePath: null },
+      }),
+    ).toMatchObject({ branch: "personal" });
+    expect(
+      fillNewTaskWorkspaceBranch({
+        ...base,
+        defaultWorktreeBaseRef: "personal",
+        selection: { mode: "worktree", branch: "dependency", worktreePath: null },
+      }),
+    ).toMatchObject({ branch: "dependency" });
+  });
+
   it("keeps an explicit branch", () => {
     const selection = { mode: "worktree", branch: "release", worktreePath: null } as const;
     expect(fillNewTaskWorkspaceBranch({ ...base, selection })).toBe(selection);

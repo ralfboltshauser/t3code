@@ -272,12 +272,97 @@ def verify(host, commit):
     raise RuntimeError(f"New environment failed verification: {last}")
 
 
+
+def workspace_probe(host, worktree, canonical):
+    path = Path(worktree).resolve()
+    root = Path(canonical).resolve()
+    if path == root or root in path.parents or path in root.parents:
+        raise RuntimeError("Refusing protected workspace path")
+    database = Path(host["home"]) / "userdata/statev2.sqlite"
+    connection = sqlite3.connect(database.as_uri() + "?mode=ro", uri=True, timeout=5)
+    try:
+        rows = connection.execute("SELECT thread_id, payload_json FROM orchestration_v2_projection_threads WHERE deleted_at IS NULL").fetchall()
+        owners = [identity for identity, raw in rows
+                  if (workspace := json.loads(raw).get("worktreePath")) is not None
+                  and Path(workspace).resolve() == path]
+        active = 0
+        for identity in owners:
+            active += connection.execute("SELECT count(*) FROM orchestration_v2_projection_runs WHERE thread_id = ? AND completed_at IS NULL", (identity,)).fetchone()[0]
+    finally:
+        connection.close()
+    exists = path.exists()
+    if exists:
+        actual = Path(run("git", "-C", str(path), "rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
+        if actual != root / ".git":
+            raise RuntimeError("Source workspace belongs to another repository")
+    # Unknown process cwd visibility must block removal, never certify an idle workspace.
+    processes_in_path = True
+    if sys.platform.startswith("linux"):
+        processes_in_path = False
+        for proc in Path("/proc").iterdir():
+            if not proc.name.isdigit():
+                continue
+            try:
+                cwd = (proc / "cwd").resolve(strict=True)
+                processes_in_path |= cwd == path or path in cwd.parents
+            except FileNotFoundError:
+                pass
+            except PermissionError:
+                processes_in_path = True
+    elif sys.platform == "darwin":
+        result = subprocess.run(["lsof", "-n", "-a", "-d", "cwd", "-Fn"], text=True, capture_output=True)
+        if result.returncode == 0 and not result.stderr:
+            processes_in_path = any(Path(line[1:]) == path or path in Path(line[1:]).parents
+                                    for line in result.stdout.splitlines() if line.startswith("n/"))
+    return dict(exists=exists, head=run("git", "-C", str(path), "rev-parse", "HEAD") if exists else None,
+                dirty=bool(run("git", "-C", str(path), "status", "--porcelain", "--untracked-files=all")) if exists else False,
+                referenced=bool(owners), active=active, processes=processes_in_path,
+                running=runtime(host)[0] is not None)
+
+
+
+def cleanup_workspace(host, worktree, canonical, branch, head, release):
+    if branch in ("personal", "main") or branch.startswith("-"):
+        raise RuntimeError("Protected branch")
+    run("git", "check-ref-format", "refs/heads/" + branch)
+    root = Path(canonical).resolve()
+    path = Path(worktree).resolve()
+    def git(*args):
+        return run("git", "-C", str(root), *args)
+    git("merge-base", "--is-ancestor", head, release)
+    remote_ref = "refs/heads/" + branch
+    remote = git("ls-remote", "--refs", "origin", remote_ref)
+    if remote and remote.split()[0] != head:
+        raise RuntimeError("Remote branch advanced")
+    for record in git("worktree", "list", "--porcelain").split("\n\n"):
+        lines = record.splitlines()
+        if "branch " + remote_ref in lines and lines[0] != "worktree " + str(path):
+            raise RuntimeError("Branch is checked out in another worktree")
+    probe = workspace_probe(host, worktree, canonical)
+    if probe["referenced"] or probe["active"]:
+        raise RuntimeError("T3 still owns this workspace; retire it through Storage cleanup")
+    if probe["exists"]:
+        if probe["head"] != head or probe["dirty"]:
+            raise RuntimeError("Workspace changed since release")
+        if probe["running"] or probe["processes"]:
+            raise RuntimeError("Source runtime or workspace processes remain")
+        git("worktree", "remove", str(path))
+    result = subprocess.run(["git", "-C", str(root), "show-ref", "--verify", "--quiet", remote_ref])
+    if result.returncode == 0:
+        git("update-ref", "-d", remote_ref, head)
+    elif result.returncode != 1:
+        raise RuntimeError("Cannot inspect local branch")
+    if remote:
+        git("push", "--force-with-lease=" + remote_ref + ":" + head, "origin", ":" + remote_ref)
+    return {"outcome": "removed", "branch": branch, "worktree": str(path)}
+
+
 def main():
     operation, encoded, *args = sys.argv[1:]
     host = json.loads(base64.urlsafe_b64decode(encoded))
     functions = {"probe": probe, "stop": stop, "backup": backup, "activate": activate,
                  "start": start, "verify": verify, "stopped-check": stopped_check,
-                 "restore-before-start": restore_before_start}
+                 "restore-before-start": restore_before_start, "workspace-probe": workspace_probe, "workspace-cleanup": cleanup_workspace}
     result = functions[operation](host, *args)
     print(json.dumps(result))
 
