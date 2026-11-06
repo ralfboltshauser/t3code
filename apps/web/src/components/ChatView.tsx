@@ -3726,7 +3726,9 @@ export default function ChatView(props: ChatViewProps) {
                               onPageScrollRelease={onComposerPageScrollReleaseStable}
                               onCompactContext={onComposerCompactContextStable}
                               onSend={onComposerSendStable}
-                              onSendLatestQueuedMessage={sendLatestQueuedMessageStable}
+                              onSendLatestQueuedMessage={
+                                hasQueuedTurns ? sendLatestQueuedMessageStable : undefined
+                              }
                               onResume={onComposerResumeStable}
                               onInterrupt={onInterruptStable}
                               onImplementPlanInNewThread={onImplementPlanInNewThreadStable}

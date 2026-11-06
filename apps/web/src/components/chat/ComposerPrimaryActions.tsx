@@ -45,6 +45,7 @@ interface ComposerPrimaryActionsProps {
   preserveComposerFocusOnPointerDown?: boolean;
   isEditingQueuedMessage?: boolean;
   onSubmitMessage?: MouseEventHandler<HTMLButtonElement>;
+  onSendLatestQueuedMessage?: (() => void) | undefined;
   onResume?: () => void;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -99,6 +100,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   preserveComposerFocusOnPointerDown = false,
   isEditingQueuedMessage = false,
   onSubmitMessage,
+  onSendLatestQueuedMessage,
   onResume,
   onPreviousPendingQuestion,
   onInterrupt,
@@ -120,6 +122,16 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       canSteer,
       alternateModifier: shortcutModifiers.metaKey || shortcutModifiers.ctrlKey,
     }) === "queue";
+  const sendsQueuedMessage =
+    !hasSendableContent &&
+    !isEditingQueuedMessage &&
+    canSteer &&
+    onSendLatestQueuedMessage !== undefined &&
+    !shortcutModifiers.altKey &&
+    !shortcutModifiers.shiftKey &&
+    (isMacPlatform(navigator.platform)
+      ? shortcutModifiers.metaKey && !shortcutModifiers.ctrlKey
+      : shortcutModifiers.ctrlKey && !shortcutModifiers.metaKey);
   const alternateAction = alternateComposerDispatchAction(followUpBehavior);
   const isSendDisabled = !canOperateThread || sendDisabledReason !== null;
   const stageBackdropVariant = useSidebarStageBackdropVariant(environmentIdentificationMode);
@@ -259,14 +271,18 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     );
   }
 
-  if (canInterrupt && !hasSendableContent && !isEditingQueuedMessage) {
+  if (canInterrupt && !hasSendableContent && !isEditingQueuedMessage && !sendsQueuedMessage) {
     return renderStopGenerationButton(false);
   }
 
-  const showResume = canResume && !hasSendableContent && !isEditingQueuedMessage;
+  const showResume =
+    canResume && !hasSendableContent && !isEditingQueuedMessage && !sendsQueuedMessage;
 
   const compactTokens =
-    compactBeforeSendTokens !== null && !showResume && !isEditingQueuedMessage
+    compactBeforeSendTokens !== null &&
+    !showResume &&
+    !isEditingQueuedMessage &&
+    !sendsQueuedMessage
       ? formatContextWindowTokens(compactBeforeSendTokens)
       : null;
   const compactsBeforeSend = compactTokens !== null && !keepFullHistory;
@@ -302,22 +318,25 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
 
   const sendButton = (
     <button
-      type={showResume ? "button" : "submit"}
+      type={showResume || sendsQueuedMessage ? "button" : "submit"}
       className={cn(
         "relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-control-highlight hover:scale-105 active:inset-shadow-control-pressed active:shadow-none disabled:pointer-events-none disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8 [&_svg]:pointer-events-none",
         stageBackdropVariant
           ? "bg-transparent text-white enabled:shadow-black/24 enabled:hover:brightness-110 disabled:opacity-64"
           : "bg-message-action text-message-action-foreground enabled:shadow-message-action/24 hover:bg-message-action-hover disabled:bg-foreground/12 disabled:text-muted-foreground",
+        sendsQueuedMessage && "h-8 w-8",
       )}
       {...pointerFocusProps}
-      onClick={showResume ? onResume : onSubmitMessage}
+      onClick={
+        sendsQueuedMessage ? onSendLatestQueuedMessage : showResume ? onResume : onSubmitMessage
+      }
       disabled={
         isSendBusy ||
         isSendDisabled ||
         isEnvironmentUnavailable ||
-        (!hasSendableContent && !showResume)
+        (!hasSendableContent && !showResume && !sendsQueuedMessage)
       }
-      aria-label={submitStatus ?? submitLabel}
+      aria-label={sendsQueuedMessage ? "Send latest queued message" : (submitStatus ?? submitLabel)}
     >
       {stageBackdropVariant ? (
         <span className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
@@ -331,7 +350,10 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       ) : isEditingQueuedMessage ? (
         <CheckIcon className="size-4" aria-hidden="true" />
       ) : isRunning ? (
-        <MorphIcon className="size-4" icon={isQueuing ? ListPlus : CornerUpRight} />
+        <MorphIcon
+          className="size-4"
+          icon={isQueuing && !sendsQueuedMessage ? ListPlus : CornerUpRight}
+        />
       ) : (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path
@@ -349,7 +371,11 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   const submit = (
     <Tooltip key="submit">
       <TooltipTrigger render={<span className="inline-flex" />}>{sendButton}</TooltipTrigger>
-      <TooltipPopup>{submitTooltip}</TooltipPopup>
+      <TooltipPopup>
+        {sendsQueuedMessage
+          ? `Send latest queued message (${isMacPlatform(navigator.platform) ? "⌘" : "Ctrl"}+Enter)`
+          : submitTooltip}
+      </TooltipPopup>
     </Tooltip>
   );
   if (compactTokens === null) return submit;
