@@ -178,6 +178,17 @@ python3 -m unittest discover -s scripts/personal-fork -p 'test_*.py'
 vp test run scripts/check-changed.test.ts packages/shared/src/testing/longTempDir.test.ts
 ```
 
+`thread.toggleUnread` is an unbound command in Keybindings settings that toggles
+the active persisted chat between read and unread using its latest completed
+result and server-first visit watermark. Marking read visits that completion;
+marking unread reuses the existing action. Chats without a completed result,
+drafts and held-key repeats do not dispatch. Keep the handler in
+`chat/useThreadLifecycle.tsx`, its contract registry entry and the Settings
+label in `KeybindingsSettings.logic.ts`. Preserve the independent Mark Unread
+command. Verify both directions without navigation, Read-group placement and
+project counts in an isolated client, plus
+`vp test run packages/contracts/src/keybindings.test.ts packages/client-runtime/src/state/threadVisits.test.ts apps/web/src/components/Sidebar.logic.test.ts`.
+
 `thread.markUnread` is an unbound command in Keybindings settings that marks the
 open persisted chat unread without navigating away. It reuses `useThreadActions`
 and existing visit semantics; drafts and held-key repeats do not dispatch it.

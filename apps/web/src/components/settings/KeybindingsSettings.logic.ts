@@ -376,6 +376,7 @@ export function buildKeybindingCommandOptions(
 }
 
 export function commandLabel(command: KeybindingCommand): string {
+  if (command === "thread.toggleUnread") return "Thread: Toggle Read/Unread";
   if (command === "profile.next") return "Profiles: Next Profile";
   if (command === "profile.previous") return "Profiles: Previous Profile";
   if (command === "workspace.focusNext") return "Focus Next Workspace Area";

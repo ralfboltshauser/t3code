@@ -36,7 +36,7 @@ import {
 import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
 import { settleAndAdvance } from "../../settleAndAdvance";
 import type { ChatShortcutCommands } from "./useChatShortcuts";
-import { resolveThreadLastVisitedAt } from "../Sidebar.logic";
+import { hasUnseenCompletion, resolveThreadLastVisitedAt } from "../Sidebar.logic";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { type SetStateAction, useRef, useState } from "react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
@@ -206,6 +206,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       ? threadWokeAt(activeThreadShell, { now: snoozeClock })
       : null;
   const acknowledgeThreadWoke = useAcknowledgeThreadWoke();
+  const visitThread = useAtomCommand(threadEnvironment.visit, { reportFailure: false });
   const acknowledgeActiveThreadWoke = () => {
     if (activeThreadRef === null || activeThreadWokeAt === null) return;
     acknowledgeThreadWoke(activeThreadRef, activeThreadWokeAt);
@@ -653,6 +654,24 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       );
     };
   const shortcuts = {
+    "thread.toggleUnread": ({ event }) => {
+      if (!activeThreadShell || !activeThreadRef) return false;
+      const completedAt = activeThreadShell.latestRun?.completedAt;
+      if (event.repeat || !completedAt) return;
+      if (
+        hasUnseenCompletion({
+          ...activeThreadShell,
+          lastVisitedAt: activeThreadLastVisitedAt,
+        })
+      ) {
+        void visitThread({
+          environmentId: activeThreadRef.environmentId,
+          input: { threadId: activeThreadRef.threadId, visitedAt: completedAt },
+        });
+      } else {
+        markThreadUnread(activeThreadRef);
+      }
+    },
     "thread.markUnread": ({ event }) => {
       if (!activeThreadShell || !activeThreadRef) return false;
       if (!event.repeat) markThreadUnread(activeThreadRef);
