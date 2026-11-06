@@ -386,12 +386,16 @@ function launcherFixture() {
     root,
     source,
     write,
-    run(failStep = "") {
-      return NodeChildProcess.spawnSync(process.execPath, ["scripts/check-changed.ts", "HEAD"], {
-        cwd: root,
-        encoding: "utf8",
-        env: { ...env, TEMP: NodeOS.tmpdir(), RECORDS: records, FAIL_STEP: failStep },
-      });
+    run(failStep = "", args: Array<string> = []) {
+      return NodeChildProcess.spawnSync(
+        process.execPath,
+        ["scripts/check-changed.ts", "HEAD", ...args],
+        {
+          cwd: root,
+          encoding: "utf8",
+          env: { ...env, TEMP: NodeOS.tmpdir(), RECORDS: records, FAIL_STEP: failStep },
+        },
+      );
     },
     calls: (): Array<{ args: Array<string>; cwd: string }> =>
       NodeFS.readdirSync(records).map((file) =>
@@ -418,6 +422,11 @@ it("checks changed source paths through the Windows launcher", () => {
   expect(calls.some(({ args }) => args[0] === "install")).toBe(false);
   expect(result.stdout).toContain("fixture stdout: lint");
   expect(result.stdout).toContain("fixture stderr: lint");
+  expect(project.run().stdout).toContain("Nothing changed since the last passing run");
+  const fresh = project.run("", ["--fresh"]);
+  expect(fresh.status, fresh.stdout + fresh.stderr).toBe(0);
+  expect(fresh.stdout).not.toContain("Nothing changed since the last passing run");
+  expect(fresh.stdout).toContain("fixture stdout: lint");
 });
 
 it("lints an Astro component and runs knip when only it changed", () => {

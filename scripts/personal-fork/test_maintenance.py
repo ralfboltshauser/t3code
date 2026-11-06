@@ -3,6 +3,9 @@
 import contextlib
 import io
 import json
+import os
+import plistlib
+import sys
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -14,6 +17,7 @@ import host
 import manage
 import layout
 import subprocess
+import threading
 
 
 class DeploymentTest(unittest.TestCase):
@@ -193,6 +197,117 @@ class LayoutTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.object(manage, "LOCAL", Path(directory)):
             with self.assertRaisesRegex(RuntimeError, "Host inventory missing"):
                 manage.inventory()
+
+
+class MacArtifactTest(unittest.TestCase):
+    def test_failed_sign_or_verification_never_publishes_a_ready_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / 'repo'
+            repo.mkdir()
+            (repo / 'package.json').write_text(json.dumps({'engines': {'node': '0'}}))
+            project = root / 'project'
+            binaries = project / 'tooling/node-v0-darwin-arm64/bin'
+            binaries.mkdir(parents=True)
+            settings = root / 'settings.json'
+            hosts = root / 'hosts.json'
+            settings.write_text(json.dumps({'signing_identity': 'fixture', 'bundle_id': 'fixture.personal'}))
+            hosts.write_text(json.dumps({'hosts': [{'transport': 'local', 'home': '/fixture/home'}]}))
+            script = Path(manage.SCRIPTS) / 'build-mac.sh'
+            command = f"""#!{sys.executable}
+import hashlib,json,os,plistlib,shutil,sys
+from pathlib import Path
+name=Path(sys.argv[0]).name
+args=sys.argv[1:]
+if name=='node':
+ if args==['--version']: print('v0')
+ elif args[0]=='-p': print('1.0.0')
+ else:
+  app=Path(args[args.index('--output-dir')+1])/'mac-arm64/T3 Code (Beta).app/Contents'
+  (app/'Resources').mkdir(parents=True)
+  (app/'Info.plist').write_bytes(plistlib.dumps({{}}))
+elif name=='security': print('fixture')
+elif name=='ditto': shutil.copytree(args[0],args[1])
+elif name=='git': print('lockfile')
+elif name=='codesign':
+ app=Path(args[-1]); final=Path(os.environ['FIXTURE_TARGET'])
+ assert not final.exists(), 'bundle visible before signing completed'
+ assert (app/'Contents/Resources/MAINTENANCE_READY').is_file()
+ digest=hashlib.sha256((app/'Contents/Info.plist').read_bytes()).hexdigest()
+ signature=app/'signature'
+ if '--verify' in args:
+  assert signature.read_text()==digest
+ else: signature.write_text(digest)
+ if os.environ['FIXTURE_FAILURE'] == ('verify' if '--verify' in args else 'sign'): sys.exit(1)
+"""
+            for name in ('node', 'vp', 'security', 'ditto', 'git', 'codesign'):
+                path = binaries / name
+                path.write_text(command)
+                path.chmod(0o755)
+            for failure in ('sign', 'verify', 'none'):
+                with self.subTest(failure=failure):
+                    destination = root / failure
+                    destination.mkdir()
+                    target = destination / 'T3 Code (Personal).app'
+                    env = dict(os.environ, FIXTURE_TARGET=str(target), FIXTURE_FAILURE=failure)
+                    result = subprocess.run(['bash', str(script), str(project), str(repo), 'b' * 40,
+                                             str(destination), str(settings), str(hosts)], env=env, capture_output=True)
+                    self.assertEqual(result.returncode == 0, failure == 'none', result.stderr.decode())
+                    self.assertEqual(target.exists(), failure == 'none')
+                    self.assertEqual(list(destination.glob('.signing.*')), [])
+                    if target.exists():
+                        value = plistlib.loads((target / 'Contents/Info.plist').read_bytes())
+                        self.assertEqual(value['CFBundleIdentifier'], 'fixture.personal')
+                        self.assertEqual(value['LSEnvironment']['ANTHROPIC_API_KEY'], '')
+
+
+class BuildCohortTest(unittest.TestCase):
+    def test_builders_overlap_and_only_a_complete_valid_cohort_replaces_the_queue(self):
+        for failure in ('ubuntu', 'evidence', None):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                commit = 'b' * 40
+                config = {'origin': 'fixture', 'hosts': [{'id': 'mac'}, {'id': 'ubuntu'}]}
+                pending = root / 'pending.json'
+                previous = {'commit': 'a' * 40}
+                host.atomic_json(pending, previous)
+                barrier = threading.Barrier(2, timeout=5)
+                finished = []
+
+                def build(h, *_args):
+                    barrier.wait()
+                    finished.append(h['id'])
+                    if h['id'] == failure:
+                        raise RuntimeError('fixture build failed')
+
+                def run(*args, **_kwargs):
+                    if 'get-url' in args:
+                        return 'fixture'
+                    if args[-2:] == ('rev-parse', 'HEAD'):
+                        return commit
+                    return ''
+
+                evidence_checks = []
+                def evidence(*_args):
+                    evidence_checks.append(True)
+                    if len(evidence_checks) > 1 and failure == 'evidence':
+                        raise RuntimeError('verification evidence changed during builds')
+
+                with patch.multiple(manage, ROOT=root, LOCAL=root, STATE=root), \
+                        patch.object(manage, 'inventory', return_value=config), \
+                        patch.object(manage, 'pending_release', return_value=previous), \
+                        patch.object(manage, 'run', side_effect=run), \
+                        patch.object(manage, 'host_call', side_effect=lambda *_args: {'target_ready': len(finished) == 2}), \
+                        patch.object(manage.verification, 'require_commit', side_effect=evidence), \
+                        patch.object(manage, 'build_host', side_effect=build):
+                    if failure:
+                        with self.assertRaisesRegex(RuntimeError, 'ubuntu.*fixture build failed|evidence changed'):
+                            manage.stage(commit)
+                    else:
+                        manage.stage(commit)
+                self.assertCountEqual(finished, ['mac', 'ubuntu'])
+                self.assertEqual(json.loads(pending.read_text())['commit'], previous['commit'] if failure else commit)
+                self.assertEqual((root / 'superseded' / (previous['commit'] + '.json')).exists(), failure is None)
 
 
 if __name__ == "__main__":

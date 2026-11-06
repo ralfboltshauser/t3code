@@ -142,7 +142,21 @@ pending request status. Verify with `vp run check:changed` and light/dark client
 captures of an input request beside its project summary; this is a visual change.
 
 The fork also maintains project-local skills and coordinated deployment tooling
-under `scripts/personal-fork/`.
+under `scripts/personal-fork/`. Release verification runs one candidate check
+process and binds its completed exit status and log to unchanged source and
+relevant environment inputs. Preserve this evidence gate in `verification.py`,
+`workflow.py` and `manage.py`; narrative verification alone cannot publish or
+stage. Independent host builds overlap, while every required host must validate
+before queuing. Mac bundles become visible only after signing and strict
+verification at a temporary path. Shared `testing/longTempDir.ts` canonicalizes
+Darwin temp aliases without removing explicit symlink test coverage.
+Verify failed/interrupted/stale checks, mixed-source rejection, concurrent build
+failure preservation and failed-signing invisibility with:
+
+```sh
+python3 -m unittest discover -s scripts/personal-fork -p 'test_*.py'
+vp test run scripts/check-changed.test.ts packages/shared/src/testing/longTempDir.test.ts
+```
 
 Record each customization here with its intended behavior, owning paths, and a
 focused verification command. Record intentional removals too, so an update

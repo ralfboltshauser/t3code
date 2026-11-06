@@ -41,20 +41,30 @@ Follow [t3-fork-upstream](../t3-fork-upstream/SKILL.md) for EVERY `FORK.md` beha
 including clean merges. Compare features with one another too. Queue ambiguous
 product choices in canonical decisions.md and preserve the candidate.
 
-Run candidate instructions, manifest checks, focused interaction tests and
-`vp run check:changed PERSONAL_SHA`. Perform the required integrated client pass.
-Record real commands/results, not a generic claim that checks passed. Then:
+Run the candidate's manifest checks and focused interaction tests, and perform
+the required integrated client pass. Record their real commands/results in
+`--checks`. The coordinator runs `check:changed` against the pinned personal
+revision itself; use this one invocation so release checks cannot overlap:
 
 ```sh
-python3 scripts/personal-fork/workflow.py verify RELEASE_ID --checks "Commands and actual results"
+python3 scripts/personal-fork/workflow.py verify RELEASE_ID --checks "Manifest, interaction and client commands/results"
 python3 scripts/personal-fork/workflow.py publish RELEASE_ID
 python3 scripts/personal-fork/workflow.py stage RELEASE_ID
 python3 scripts/personal-fork/workflow.py report RELEASE_ID
 ```
 
+Wait for `verify` to exit zero and record completed evidence before publishing.
+Its printed log path or a passing individual step is progress, not completion.
+On failure, inspect that log, fix and commit the candidate, then rerun `verify`.
+It rejects source edits during checks, including edits restored to their old bytes.
+Publish and stage revalidate the recorded inputs and completed process evidence;
+legacy prose-only verification must be rerun.
+
 `publish` rejects a changed candidate or a concurrent personal advance. Merge new
 personal into the candidate, inspect interactions and reverify; never overwrite it.
-`stage` builds the exact published commit everywhere. An ancestor pending revision
+`stage` builds the exact published commit on independent hosts concurrently and
+queues only after every required artifact passes validation. An ancestor pending
+revision
 can be superseded under the release lock before cutover; divergent queues or any
 cutover journal block it. Failed builds preserve the prior queue/installations.
 Release the integration lock and end the turn after staging; the independent
