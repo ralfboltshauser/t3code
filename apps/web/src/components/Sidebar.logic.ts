@@ -1123,8 +1123,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.hasPendingApprovals || thread.pendingSubagentRequest === "approval") {
     return {
       label: "Pending Approval",
-      colorClass: "text-amber-600 dark:text-amber-300/90",
-      dotClass: "bg-amber-500 dark:bg-amber-300/90",
+      colorClass: "text-warning-foreground",
+      dotClass: "bg-warning",
       pulse: false,
     };
   }
@@ -1132,8 +1132,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.hasPendingUserInput || thread.pendingSubagentRequest === "user_input") {
     return {
       label: "Awaiting Input",
-      colorClass: "text-indigo-600 dark:text-indigo-300/90",
-      dotClass: "bg-indigo-500 dark:bg-indigo-300/90",
+      colorClass: "text-warning-foreground",
+      dotClass: "bg-warning",
       pulse: false,
     };
   }
@@ -1141,8 +1141,8 @@ export function resolveThreadStatusPill(input: {
   if ((thread.pendingGuestMessageCount ?? 0) > 0) {
     return {
       label: "Guest Request",
-      colorClass: "text-guest-foreground",
-      dotClass: "bg-guest",
+      colorClass: "text-warning-foreground",
+      dotClass: "bg-warning",
       pulse: false,
     };
   }

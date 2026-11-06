@@ -99,14 +99,14 @@ const STATUS_LABEL_BY_STATUS: Partial<Record<ThreadListV2Status, StatusLabel>> =
   input: {
     label: "Input",
     icon: "questionmark.bubble",
-    className: "text-adaptive-indigo-600-300",
-    iconTintClassName: "accent-adaptive-indigo-600-300",
+    className: "text-warning-foreground",
+    iconTintClassName: "accent-warning-foreground",
   },
   request: {
     label: "Request",
     icon: "person.crop.circle",
-    className: "text-adaptive-fuchsia-600-300",
-    iconTintClassName: "accent-adaptive-fuchsia-600-300",
+    className: "text-warning-foreground",
+    iconTintClassName: "accent-warning-foreground",
   },
   working: {
     label: "Working",

@@ -749,13 +749,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             ? {
                 label: "Input",
                 icon: "input" as const,
-                className: "text-indigo-600 dark:text-indigo-300",
+                className: "text-warning-foreground",
               }
             : status === "request"
               ? {
                   label: "Request",
                   icon: "request" as const,
-                  className: "text-guest-foreground",
+                  className: "text-warning-foreground",
                 }
               : status === "limited"
                 ? {

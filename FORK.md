@@ -133,6 +133,14 @@ Verify transitions, exclusive counts, and stable totals through project folding:
 cd apps/web && vp test run src/components/Sidebar.logic.test.ts src/components/Sidebar.browser.test.tsx
 ```
 
+Chats waiting on the user use the warning palette for input, approval, and guest
+requests, matching the project ring's attention segment. Preserve semantic warning
+tokens in web `Sidebar.logic.ts` and `sidebar/SidebarThreadRow.tsx`, mobile
+`thread-list-v2-items.tsx` and `ThreadSideChatsRow.tsx`, and the shared approval/input
+tint in `widgets/AgentActivity.tsx`. Guest identity colors remain separate from
+pending request status. Verify with `vp run check:changed` and light/dark client
+captures of an input request beside its project summary; this is a visual change.
+
 The fork also maintains project-local skills and coordinated deployment tooling
 under `scripts/personal-fork/`.
 

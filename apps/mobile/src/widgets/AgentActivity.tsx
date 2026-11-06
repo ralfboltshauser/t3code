@@ -76,9 +76,8 @@ function AgentActivity(
     }
     switch (phase) {
       case "waiting_for_approval":
-        return isLightScheme ? "#d97706" : "#fcd34d";
       case "waiting_for_input":
-        return isLightScheme ? "#4f46e5" : "#a5b4fc";
+        return isLightScheme ? "#d97706" : "#fcd34d";
       case "failed":
         return isLightScheme ? "#dc2626" : "#fca5a5";
       case "completed":
