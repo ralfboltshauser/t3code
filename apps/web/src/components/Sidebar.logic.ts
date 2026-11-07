@@ -1279,24 +1279,21 @@ function getProjectSortTimestamp(
   projectThreads: readonly SidebarProjectThread[],
   sortOrder: Exclude<SidebarProjectSortOrder, "manual">,
 ): number {
-  if (sortOrder === "updated_at") {
-    return projectThreads.reduce(
-      (latest, thread) =>
-        thread.settledOverride === "settled"
-          ? latest
-          : Math.max(latest, getThreadSortTimestamp(thread, sortOrder)),
-      Number.NEGATIVE_INFINITY,
-    );
-  }
-
-  if (projectThreads.length > 0) {
-    return projectThreads.reduce(
+  const sortableThreads =
+    sortOrder === "updated_at"
+      ? projectThreads.filter((thread) => thread.settledOverride !== "settled")
+      : projectThreads;
+  if (sortableThreads.length > 0) {
+    return sortableThreads.reduce(
       (latest, thread) => Math.max(latest, getThreadSortTimestamp(thread, sortOrder)),
       Number.NEGATIVE_INFINITY,
     );
   }
 
-  return toSortableTimestamp(project.createdAt) ?? Number.NEGATIVE_INFINITY;
+  if (sortOrder === "created_at") {
+    return toSortableTimestamp(project.createdAt) ?? Number.NEGATIVE_INFINITY;
+  }
+  return toSortableTimestamp(project.updatedAt ?? project.createdAt) ?? Number.NEGATIVE_INFINITY;
 }
 
 function sortProjectsByActivity<TProject extends SidebarProject>(

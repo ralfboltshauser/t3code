@@ -104,9 +104,9 @@ vp test run apps/web/src/components/Sidebar.logic.test.ts apps/web/src/component
 ```
 
 Last user message project ordering considers only non-archived, unsettled threads,
-so settling a recent chat restores the priority of older ongoing work. Projects
-without eligible threads sort below those with ongoing work, with title/identity
-ties; reopening a chat restores its message timestamp. Keep this policy in web
+so settled chats no longer boost a project through their messages. Projects
+without eligible threads retain the project updated/created timestamp fallback;
+reopening a chat restores its message timestamp. Keep this policy in web
 `Sidebar.logic.ts` project sorting, shared by the boring sidebar, project pickers
 and command palette. Preserve manual and Created at ordering, profile scoping,
 repository grouping and hidden-subagent exclusion; native mobile is unchanged.
