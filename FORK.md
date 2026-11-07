@@ -103,10 +103,10 @@ visibility, read/unread transitions, actionable returns, and keyboard fallback w
 vp test run apps/web/src/components/Sidebar.logic.test.ts apps/web/src/components/Sidebar.browser.test.tsx apps/web/src/lib/sidebarTree.browser.test.ts
 ```
 
-Last user message project ordering considers only non-archived, unsettled threads,
-so settled chats no longer boost a project through their messages. Projects
-without eligible threads retain the project updated/created timestamp fallback;
-reopening a chat restores its message timestamp. Keep this policy in web
+Last user message project ordering puts projects with non-archived, unsettled
+threads first, ranked by those threads' latest user message. Empty and settled-only
+projects follow, ordered by the existing project updated/created timestamp fallback.
+Reopening a chat restores its message timestamp and priority. Keep this policy in web
 `Sidebar.logic.ts` project sorting, shared by the boring sidebar, project pickers
 and command palette. Preserve manual and Created at ordering, profile scoping,
 repository grouping and hidden-subagent exclusion; native mobile is unchanged.

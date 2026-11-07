@@ -742,7 +742,7 @@ describe("sortScopedProjectsForSidebar", () => {
 });
 
 describe("sortSidebarV2ProjectGroups", () => {
-  it("orders by unsettled messages with project timestamps as the fallback", () => {
+  it("puts unsettled projects first and retains timestamp ordering for the rest", () => {
     const projects = ["empty", "recent", "ongoing", "mixed"].map((name) => {
       const project = makeProject({
         id: ProjectId.make(name),
@@ -784,18 +784,18 @@ describe("sortSidebarV2ProjectGroups", () => {
         (project) => project.projectKey,
       );
 
-    expect(order()).toEqual(["empty", "recent", "ongoing", "mixed"]);
+    expect(order()).toEqual(["recent", "ongoing", "mixed", "empty"]);
     threads[1] = { ...threads[1]!, settledOverride: "settled" };
-    expect(order()).toEqual(["empty", "ongoing", "mixed", "recent"]);
+    expect(order()).toEqual(["ongoing", "mixed", "empty", "recent"]);
     projects[1] = { ...projects[1]!, updatedAt: "2026-03-09T12:00:00.000Z" };
-    expect(order()).toEqual(["recent", "empty", "ongoing", "mixed"]);
+    expect(order()).toEqual(["ongoing", "mixed", "recent", "empty"]);
     expect(
       sortSidebarV2ProjectGroups(projects, threads, "created_at", new Set()).map(
         (project) => project.projectKey,
       ),
     ).toEqual(["empty", "mixed", "ongoing", "recent"]);
     threads[1] = { ...threads[1]!, settledOverride: "active" };
-    expect(order()).toEqual(["empty", "recent", "ongoing", "mixed"]);
+    expect(order()).toEqual(["recent", "ongoing", "mixed", "empty"]);
     expect(
       sortSidebarV2ProjectGroups(projects, threads, "manual", new Set()).map(
         (project) => project.projectKey,

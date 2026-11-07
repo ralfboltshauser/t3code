@@ -1279,12 +1279,8 @@ function getProjectSortTimestamp(
   projectThreads: readonly SidebarProjectThread[],
   sortOrder: Exclude<SidebarProjectSortOrder, "manual">,
 ): number {
-  const sortableThreads =
-    sortOrder === "updated_at"
-      ? projectThreads.filter((thread) => thread.settledOverride !== "settled")
-      : projectThreads;
-  if (sortableThreads.length > 0) {
-    return sortableThreads.reduce(
+  if (projectThreads.length > 0) {
+    return projectThreads.reduce(
       (latest, thread) => Math.max(latest, getThreadSortTimestamp(thread, sortOrder)),
       Number.NEGATIVE_INFINITY,
     );
@@ -1308,11 +1304,22 @@ function sortProjectsByActivity<TProject extends SidebarProject>(
 
   // Project timestamps scan all threads; compute once per project instead of per comparison.
   return projects
-    .map((project) => ({
-      project,
-      timestamp: getProjectSortTimestamp(project, getProjectThreads(project), sortOrder),
-    }))
+    .map((project) => {
+      const projectThreads = getProjectThreads(project);
+      const sortableThreads =
+        sortOrder === "updated_at"
+          ? projectThreads.filter((thread) => thread.settledOverride !== "settled")
+          : projectThreads;
+      return {
+        project,
+        hasUnsettledThreads: sortOrder === "updated_at" && sortableThreads.length > 0,
+        timestamp: getProjectSortTimestamp(project, sortableThreads, sortOrder),
+      };
+    })
     .sort((left, right) => {
+      if (left.hasUnsettledThreads !== right.hasUnsettledThreads) {
+        return left.hasUnsettledThreads ? -1 : 1;
+      }
       const byTimestamp =
         right.timestamp === left.timestamp ? 0 : right.timestamp > left.timestamp ? 1 : -1;
       return byTimestamp || compareTies(left.project, right.project);
