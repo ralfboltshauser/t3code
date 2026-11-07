@@ -520,7 +520,9 @@ type ScopedSidebarProject = SidebarProject & {
   environmentId: string;
 };
 
-type ScopedSidebarThread = ThreadSortInput & {
+type SidebarProjectThread = ThreadSortInput & Pick<SidebarThreadSummary, "settledOverride">;
+
+type ScopedSidebarThread = SidebarProjectThread & {
   environmentId: string;
   projectId: string;
   archivedAt: string | null;
@@ -1274,9 +1276,19 @@ export function getFallbackThreadIdAfterDelete<
 }
 function getProjectSortTimestamp(
   project: SidebarProject,
-  projectThreads: readonly ThreadSortInput[],
+  projectThreads: readonly SidebarProjectThread[],
   sortOrder: Exclude<SidebarProjectSortOrder, "manual">,
 ): number {
+  if (sortOrder === "updated_at") {
+    return projectThreads.reduce(
+      (latest, thread) =>
+        thread.settledOverride === "settled"
+          ? latest
+          : Math.max(latest, getThreadSortTimestamp(thread, sortOrder)),
+      Number.NEGATIVE_INFINITY,
+    );
+  }
+
   if (projectThreads.length > 0) {
     return projectThreads.reduce(
       (latest, thread) => Math.max(latest, getThreadSortTimestamp(thread, sortOrder)),
@@ -1284,16 +1296,13 @@ function getProjectSortTimestamp(
     );
   }
 
-  if (sortOrder === "created_at") {
-    return toSortableTimestamp(project.createdAt) ?? Number.NEGATIVE_INFINITY;
-  }
-  return toSortableTimestamp(project.updatedAt ?? project.createdAt) ?? Number.NEGATIVE_INFINITY;
+  return toSortableTimestamp(project.createdAt) ?? Number.NEGATIVE_INFINITY;
 }
 
 function sortProjectsByActivity<TProject extends SidebarProject>(
   projects: readonly TProject[],
   sortOrder: SidebarProjectSortOrder,
-  getProjectThreads: (project: TProject) => readonly ThreadSortInput[],
+  getProjectThreads: (project: TProject) => readonly SidebarProjectThread[],
   compareTies: (left: TProject, right: TProject) => number,
 ): TProject[] {
   if (sortOrder === "manual") {

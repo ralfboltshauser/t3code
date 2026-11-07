@@ -742,6 +742,65 @@ describe("sortScopedProjectsForSidebar", () => {
 });
 
 describe("sortSidebarV2ProjectGroups", () => {
+  it("orders by unsettled messages and drops settled-only and empty projects below ongoing work", () => {
+    const projects = ["empty", "recent", "ongoing", "mixed"].map((name) => {
+      const project = makeProject({
+        id: ProjectId.make(name),
+        title: name,
+        createdAt: "2026-03-09T11:00:00.000Z",
+        updatedAt: "2026-03-09T11:00:00.000Z",
+      });
+      return {
+        ...project,
+        projectKey: name,
+        memberProjectRefs: [{ environmentId: localEnvironmentId, projectId: project.id }],
+      };
+    });
+    const threads = [
+      makeThread({
+        id: ThreadId.make("ongoing"),
+        projectId: ProjectId.make("ongoing"),
+        latestUserMessageAt: "2026-03-09T10:02:00.000Z",
+      }),
+      makeThread({
+        id: ThreadId.make("recent"),
+        projectId: ProjectId.make("recent"),
+        latestUserMessageAt: "2026-03-09T10:03:00.000Z",
+      }),
+      makeThread({
+        id: ThreadId.make("mixed-active"),
+        projectId: ProjectId.make("mixed"),
+        latestUserMessageAt: "2026-03-09T10:01:00.000Z",
+      }),
+      makeThread({
+        id: ThreadId.make("mixed-settled"),
+        projectId: ProjectId.make("mixed"),
+        latestUserMessageAt: "2026-03-09T10:04:00.000Z",
+        settledOverride: "settled",
+      }),
+    ];
+    const order = () =>
+      sortSidebarV2ProjectGroups(projects, threads, "updated_at", new Set()).map(
+        (project) => project.projectKey,
+      );
+
+    expect(order()).toEqual(["recent", "ongoing", "mixed", "empty"]);
+    threads[1] = { ...threads[1]!, settledOverride: "settled" };
+    expect(order()).toEqual(["ongoing", "mixed", "empty", "recent"]);
+    expect(
+      sortSidebarV2ProjectGroups(projects, threads, "created_at", new Set()).map(
+        (project) => project.projectKey,
+      ),
+    ).toEqual(["empty", "mixed", "ongoing", "recent"]);
+    threads[1] = { ...threads[1]!, settledOverride: "active" };
+    expect(order()).toEqual(["recent", "ongoing", "mixed", "empty"]);
+    expect(
+      sortSidebarV2ProjectGroups(projects, threads, "manual", new Set()).map(
+        (project) => project.projectKey,
+      ),
+    ).toEqual(["empty", "recent", "ongoing", "mixed"]);
+  });
+
   it("does not let a hidden subagent thread reorder projects", () => {
     const olderProjectId = ProjectId.make("project-older");
     const newerProjectId = ProjectId.make("project-newer");
