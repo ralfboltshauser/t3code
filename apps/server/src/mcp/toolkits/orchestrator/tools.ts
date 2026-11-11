@@ -1,3 +1,10 @@
+import * as ThreadHandoff from "../../../peer/handoff/ThreadHandoff.ts";
+import {
+  EnvironmentId,
+  ThreadId,
+  ProjectId,
+  OrchestrationV2ThreadHandoff,
+} from "@t3tools/contracts";
 import {
   OrchestratorMcpCapabilitiesInput,
   OrchestratorMcpCapabilitiesResult,
@@ -349,7 +356,26 @@ const EnvironmentUnlinkTool = Tool.make("t3_environment_unlink", {
   .annotate(Tool.Idempotent, true)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenWhileLinksOff);
 
+const ThreadHandoffTool = Tool.make("t3_thread_handoff", {
+  description:
+    "Move another independent idle chat and its Git working files to a linked machine. threadId is required; an agent cannot move its own active chat. environmentId names the destination. Omit continuationPrompt to move without an agent turn. The source stays readable and paused during uncertainty; retrying checks the same move. Native sessions, chat attachments and processes stay behind.",
+  parameters: Schema.Struct({
+    threadId: ThreadId,
+    environmentId: EnvironmentId,
+    projectId: Schema.optional(ProjectId),
+    continuationPrompt: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(120_000))),
+  }),
+  success: OrchestrationV2ThreadHandoff,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: [...linkingDependencies, ThreadHandoff.ThreadHandoff],
+})
+  .annotate(Tool.Title, "Move chat to another machine")
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.OpenWorld, true);
+
 export const OrchestratorToolkit = Toolkit.make(
+  ThreadHandoffTool,
   OrchestratorCapabilitiesTool,
   DelegateTaskTool,
   TaskStatusTool,

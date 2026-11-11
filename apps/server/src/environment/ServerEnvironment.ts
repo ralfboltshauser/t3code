@@ -286,6 +286,7 @@ export const make = Effect.gen(function* () {
       ...(desktopAppUpdate ? { desktopAppUpdate: true, desktopAppChannelSwitch: true } : {}),
       serverBrowser: true,
       peerLinks: true,
+      threadHandoffProtocol: 1,
       mcpModeLimitHeader: true,
       linkFence: true,
       mcpApprovalCodes: true,

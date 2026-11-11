@@ -195,6 +195,7 @@ export class EffectOutboxError extends Schema.TaggedError<EffectOutboxError>()(
 const isEffectOutboxError = Schema.is(EffectOutboxError);
 
 export interface EffectOutboxV2Shape {
+  readonly hasUnsettledForThread: (threadId: ThreadId) => Effect.Effect<boolean, EffectOutboxError>;
   readonly awaitAvailable: Effect.Effect<void>;
   readonly notifyAvailable: (count?: number) => Effect.Effect<void>;
   /** Persist rows only. Notify workers after the surrounding transaction commits. */
@@ -418,6 +419,14 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
             return row === undefined ? Effect.succeedNone : rowToEffect(row).pipe(Effect.asSome);
           }),
           Effect.mapError((cause) => new EffectOutboxError({ operation: "get", effectId, cause })),
+        ),
+      hasUnsettledForThread: (threadId) =>
+        sql<{
+          readonly found: number;
+        }>`SELECT 1 AS found FROM orchestration_v2_effect_outbox WHERE thread_id = ${threadId} AND status IN ('pending', 'running') LIMIT 1`.pipe(
+          NodeSqliteClient.readOnly,
+          Effect.map((rows) => rows.length > 0),
+          Effect.mapError((cause) => new EffectOutboxError({ operation: "has-unsettled", cause })),
         ),
       awaitAvailable: Queue.take(available),
       notifyAvailable,

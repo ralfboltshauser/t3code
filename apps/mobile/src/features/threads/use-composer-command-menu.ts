@@ -111,6 +111,7 @@ export function buildComposerSlashCommandItems(input: {
   /** T3's `/clear` replaces the provider's, which would clear a session T3 still treats as live. */
   readonly offersFreshSession?: boolean;
   readonly offersSideChat?: boolean;
+  readonly onMove?: () => void;
   readonly selectedProviderStatus: Pick<ServerProvider, "driver" | "slashCommands"> | null;
 }): ComposerCommandItem[] {
   const query = input.query.toLowerCase();
@@ -129,6 +130,14 @@ export function buildComposerSlashCommandItems(input: {
   // Providers expand commands only at the start of a message. T3 commands
   // change local state and do not have this restriction, except `/clear`.
   if (!input.atMessageStart) return items;
+  if (input.onMove && "move".includes(query))
+    items.push({
+      id: "cmd:move",
+      type: "slash-command",
+      command: "move",
+      label: "/move",
+      description: "Continue on another machine",
+    });
   if (input.offersSideChat) {
     for (const [command, description] of [
       ["side", "Ask a side question in a new side chat"],
@@ -155,6 +164,7 @@ export function buildComposerSlashCommandItems(input: {
   }
   for (const command of input.selectedProviderStatus?.slashCommands ?? []) {
     if (!command.name.toLowerCase().includes(query)) continue;
+    if (command.name === "move") continue;
     if (command.name === "clear" && input.offersFreshSession) continue;
     if (command.name === "compact" && !input.hasCompactableConversation) continue;
     if (command.name === USAGE_LIMITS_COMMAND.name && input.offersUsageLimits && !input.hasThread) {
@@ -265,6 +275,7 @@ export function useComposerCommandMenu({
   modelProviders,
   onFreshSession,
   offersSideChat = false,
+  onMove,
 }: {
   readonly draftMessage: string;
   readonly ownerKey: string | null;
@@ -290,6 +301,7 @@ export function useComposerCommandMenu({
   /** Arms a fresh session for the next message; absent where `/clear` is unavailable. */
   readonly onFreshSession?: () => void;
   readonly offersSideChat?: boolean;
+  readonly onMove?: () => void;
 }) {
   const [localSelection, setLocalSelection] = useState(() => ({
     ownerKey,
@@ -395,6 +407,7 @@ export function useComposerCommandMenu({
         offersUsageLimits,
         offersFreshSession: onFreshSession !== undefined,
         offersSideChat,
+        onMove,
         selectedProviderStatus: selectedProviderStatus
           ? {
               ...selectedProviderStatus,
@@ -632,6 +645,10 @@ export function useComposerCommandMenu({
       return;
     }
 
+    if (item.type === "slash-command" && item.command === "move" && onMove) {
+      onMove();
+      return;
+    }
     if (item.type === "slash-command" && item.command === "clear" && onFreshSession) {
       const cleared = replaceTextRange(draftMessage, trigger.rangeStart, trigger.rangeEnd, "");
       setSelection({ start: cleared.cursor, end: cleared.cursor });

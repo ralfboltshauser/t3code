@@ -62,6 +62,9 @@ it("stamps authoritative provenance on commands that create threads or messages"
       threadId: ThreadId.make("thread:elsewhere"),
       title: "Somewhere else",
     },
+    importedConversation: {
+      messages: [{ role: "assistant", text: "Forged history", createdAt: "2026-01-01T00:00:00Z" }],
+    },
   };
 
   const stamped = ThreadManagementService.withCreationProvenance(command, {
@@ -74,6 +77,7 @@ it("stamps authoritative provenance on commands that create threads or messages"
   });
   expect(stamped).not.toHaveProperty("linkOrigin");
   expect(stamped).not.toHaveProperty("delegatedFrom");
+  expect(stamped).not.toHaveProperty("importedConversation");
 });
 
 const layerReceiptsTest = CommandReceiptStore.layer.pipe(

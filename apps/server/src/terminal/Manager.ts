@@ -221,6 +221,8 @@ export class TerminalManager extends Context.Service<
 
     readonly closeOnSettle: (input: { readonly threadId: string }) => Effect.Effect<void>;
 
+    readonly hasWorkspaceSubprocess: (cwd: string) => Effect.Effect<boolean>;
+
     readonly closeIdle: (input: {
       readonly threadId: string;
       readonly terminalId?: string;
@@ -3462,6 +3464,31 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       ),
     );
 
+  const hasWorkspaceSubprocess = Effect.fn("terminal.hasWorkspaceSubprocess")(
+    function* (cwd: string) {
+      const state = yield* SynchronizedRef.get(managerStateRef);
+      const root = yield* fileSystem.realPath(cwd);
+      const running: Array<TerminalSessionState & { pid: number }> = [];
+      for (const session of state.sessions.values()) {
+        if (session.status !== "running" || session.pid === null) continue;
+        const candidate = yield* fileSystem.realPath(session.worktreePath ?? session.cwd);
+        const relative = path.relative(root, candidate);
+        if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative)))
+          running.push({ ...session, pid: session.pid });
+      }
+      if (running.length === 0) return false;
+      const { inspector: inspectorResult } = yield* acquireSubprocessInspector(
+        platform === "win32" ? CLOSE_IDLE_QUERY_TIMEOUT.win32 : CLOSE_IDLE_QUERY_TIMEOUT.posix,
+      );
+      const inspector = yield* Effect.fromResult(inspectorResult);
+      for (const session of running) {
+        if ((yield* inspector(session.pid)).hasRunningSubprocess) return true;
+      }
+      return false;
+    },
+    Effect.orElseSucceed(() => true),
+  );
+
   const closeOnSettle = Effect.fn("terminal.closeOnSettle")(function* (input: {
     readonly threadId: string;
   }) {
@@ -3491,6 +3518,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     clear,
     close,
     closeIdle,
+    hasWorkspaceSubprocess,
     closeOnSettle,
     subscribe,
     subscribeMetadata,

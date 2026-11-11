@@ -235,6 +235,10 @@
       "types": "./src/state/deviceHubAccess.ts",
       "default": "./src/state/deviceHubAccess.ts"
     },
+    "./state/threadHandoff": {
+      "types": "./src/state/threadHandoff.ts",
+      "default": "./src/state/threadHandoff.ts"
+    },
     "./state/peerLinks": {
       "types": "./src/state/peerLinks.ts",
       "default": "./src/state/peerLinks.ts"

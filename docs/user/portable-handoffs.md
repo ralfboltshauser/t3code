@@ -17,6 +17,29 @@ to retrieve saved messages and activity, including the remainder of a long item.
 constraint, you can still repeat it in your next message. A handoff is a budgeted selection, not an
 agent-written summary.
 
+## Continue on another machine
+
+Use `/move` in an idle independent chat, or choose **Move chat…** from its menu or
+command palette. Select a linked machine with the same repository registered. Both
+servers need support for moving chats. An optional next instruction is sent there;
+leaving it blank moves the chat without starting an agent turn.
+
+The move copies recent user and assistant text, unpushed commits, and captured Git
+working files into a new worktree. It uses the destination’s provider credentials
+and normal worktree setup. Ignored untracked files, chat attachments, live processes,
+and native provider sessions stay behind; staging is not preserved. Finish background
+work, disable chat schedules and PR watches, and stop external file writers first.
+Submodules, nested repositories, Git operations in progress, and bundles over 50 MiB
+are refused.
+
+The source stays readable and links to the destination. Once submitted, closing the
+view does not cancel the move. If confirmation is lost, it stays paused: **Check again**
+resumes the same move. A confirmed refusal lets you work here and retry. If interrupted
+workspace preparation needs attention, its files are retained on the destination;
+do not start a second copy until that move is resolved. To move back, use `/move` in
+the destination chat; this creates another fresh worktree and keeps the earlier copies
+as history. Your client may need to connect to the destination before opening it.
+
 ## Context limits
 
 A handoff must leave room for existing provider context, your request and attachments, instructions,

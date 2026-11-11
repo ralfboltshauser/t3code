@@ -1,3 +1,4 @@
+import { ThreadMoveScreen } from "./features/threads/ThreadMoveScreen";
 import { isDraftThreadRoute } from "./features/threads/thread-route-state";
 import { ComponentCatalogScreen } from "./features/development/ComponentCatalogScreen";
 import { PullRequestGuideStopScreen } from "./features/pull-requests/guide/PullRequestGuideScreen";
@@ -635,6 +636,10 @@ const RootStackConfig = createWorkspaceStackNavigator({
       screen: ReviewSheet,
       linking: `${THREAD_LINKING_PREFIX}/review`,
       options: pageRoute(),
+    }),
+    ThreadMove: createNativeStackScreen({
+      screen: ThreadMoveScreen,
+      options: THREAD_SETTINGS_ROUTE,
     }),
     ThreadReviewComment: createNativeStackScreen({
       screen: ReviewCommentComposerSheet,

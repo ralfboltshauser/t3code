@@ -545,7 +545,20 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     undefined,
     props.selectedThread.projectId,
   );
+  const openMove =
+    !props.isDraft &&
+    props.selectedThread.handoff?.state !== "departing" &&
+    props.selectedThread.handoff?.state !== "departed" &&
+    props.serverConfig?.environment.capabilities.threadHandoffProtocol === 1
+      ? () =>
+          navigation.navigate("ThreadMove", {
+            environmentId: props.environmentId,
+            threadId: props.selectedThread.id,
+            draftKey: composerDraftKey,
+          })
+      : undefined;
   const composerMenu = useComposerCommandMenu({
+    ...(openMove ? { onMove: openMove } : {}),
     draftMessage: draftMessage,
     ownerKey: composerDraftKey,
     environmentId: props.environmentId,
@@ -677,6 +690,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       return;
     if (usageLimitsOffered && isUsageLimitsCommand(draftMessage) && draftAttachments.length === 0) {
       if (openUsageLimits()) onChangeDraftMessage("");
+      return;
+    }
+    if (openMove && draftMessage.trim() === "/move") {
+      openMove();
       return;
     }
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);

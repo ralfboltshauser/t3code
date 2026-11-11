@@ -546,6 +546,9 @@ export interface ProjectionStoreV2Shape {
   readonly findGuestShareThreadId: (
     shareId: GuestShareId,
   ) => Effect.Effect<ThreadId | null, ProjectionStoreV2Error>;
+  readonly getDepartingWorkspaces: (
+    thread: OrchestrationV2AppThread,
+  ) => Effect.Effect<ReadonlyArray<OrchestrationV2AppThread>, ProjectionStoreV2Error>;
   readonly getThread: (
     threadId: ThreadId,
   ) => Effect.Effect<OrchestrationV2AppThread, ProjectionStoreV2Error>;
@@ -1646,6 +1649,9 @@ export function threadShellFromProjection(
     lineage: projection.thread.lineage,
     forkedFrom: projection.thread.forkedFrom,
     activeProviderThreadId: projection.thread.activeProviderThreadId,
+    ...(projection.thread.importOrigin === undefined
+      ? {}
+      : { importOrigin: projection.thread.importOrigin }),
     ...(projection.thread.historyOrigin === undefined
       ? {}
       : { historyOrigin: projection.thread.historyOrigin }),
@@ -1655,6 +1661,7 @@ export function threadShellFromProjection(
     ...(projection.thread.delegatedFrom === undefined
       ? {}
       : { delegatedFrom: projection.thread.delegatedFrom }),
+    ...(projection.thread.handoff === undefined ? {} : { handoff: projection.thread.handoff }),
     latestRunId: latestRun?.id ?? null,
     latestRunRequestedAt: latestRun?.requestedAt ?? null,
     latestRunStartedAt: latestRun?.startedAt ?? null,
@@ -1949,6 +1956,9 @@ function shellFromState(input: {
     lineage: input.state.thread.lineage,
     forkedFrom: input.state.thread.forkedFrom,
     activeProviderThreadId: input.state.thread.activeProviderThreadId,
+    ...(input.state.thread.importOrigin === undefined
+      ? {}
+      : { importOrigin: input.state.thread.importOrigin }),
     ...(input.state.thread.historyOrigin === undefined
       ? {}
       : { historyOrigin: input.state.thread.historyOrigin }),
@@ -1958,6 +1968,7 @@ function shellFromState(input: {
     ...(input.state.thread.delegatedFrom === undefined
       ? {}
       : { delegatedFrom: input.state.thread.delegatedFrom }),
+    ...(input.state.thread.handoff === undefined ? {} : { handoff: input.state.thread.handoff }),
     latestRunId: input.state.latestRunId,
     latestRunRequestedAt: input.state.latestRunRequestedAt,
     latestRunStartedAt: input.state.latestRunStartedAt,
@@ -5063,6 +5074,20 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         ),
     );
 
+    const getDepartingWorkspaces: ProjectionStoreV2Shape["getDepartingWorkspaces"] = Effect.fn(
+      "ProjectionStore.getDepartingWorkspaces",
+    )(
+      function* (thread) {
+        const rows =
+          yield* sql<PayloadRow>`SELECT payload_json FROM orchestration_v2_projection_threads WHERE project_id = ${thread.projectId} AND json_extract(payload_json, '$.handoff.state') = 'departing'`;
+        return yield* Effect.forEach(rows, (row) => decodeThreadPayload(row.payload_json));
+      },
+      (effect, thread) =>
+        effect.pipe(
+          Effect.mapError((cause) => new ProjectionStoreReadError({ threadId: thread.id, cause })),
+        ),
+    );
+
     const requireThread = Effect.fn("ProjectionStore.requireThread")(function* (
       threadId: ThreadId,
     ) {
@@ -7641,6 +7666,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getThreadShell: readOnReader(getThreadShell),
       findGuestShareThreadId: readOnReader(findGuestShareThreadId),
       getThread: readOnReader(getThread),
+      getDepartingWorkspaces: readOnReader(getDepartingWorkspaces),
       getSettlementCandidates: readOnReader(getSettlementCandidates),
       getThreadsWithPullRequests: readOnReader(getThreadsWithPullRequests),
       getThreadTitles: readOnReader(getThreadTitles),

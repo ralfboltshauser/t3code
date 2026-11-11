@@ -1,3 +1,5 @@
+import { ArrowRightIcon } from "lucide-react";
+import { openThreadMove } from "./chat/threadMoveDialogState";
 import {
   currentCreationProfile,
   useProfilesActive,
@@ -1282,6 +1284,22 @@ function OpenCommandPaletteDialog(props: {
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
+  if (
+    activeThread &&
+    activeThread.handoff?.state !== "departing" &&
+    activeThread.handoff?.state !== "departed" &&
+    activeThreadServerConfig?.environment.capabilities.threadHandoffProtocol === 1
+  ) {
+    actionItems.push({
+      kind: "action",
+      value: "action:move-chat",
+      title: "Move chat…",
+      description: "Continue on another machine",
+      searchTerms: ["move", "remote", "machine", "handoff"],
+      icon: <ArrowRightIcon className={ITEM_ICON_CLASS} />,
+      run: async () => openThreadMove(scopeThreadRef(activeThread.environmentId, activeThread.id)),
+    });
+  }
   if (projects.length > 0) {
     const activeProjectTitle =
       projectPickerEntries.find((entry) => entry.isPreferred)?.group.displayName ??

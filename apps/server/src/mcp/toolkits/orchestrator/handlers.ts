@@ -1,3 +1,5 @@
+import * as ThreadHandoff from "../../../peer/handoff/ThreadHandoff.ts";
+import { assertNotLinked } from "../../linkOrigin.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import { OrchestratorToolkit } from "./tools.ts";
 import * as Effect from "effect/Effect";
@@ -12,6 +14,29 @@ import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 import * as ThreadMetadataMcpService from "../../ThreadMetadataMcpService.ts";
 
 const handlers = {
+  t3_thread_handoff: McpToolAccess.writesThreads(
+    (input) => [input.threadId],
+    (input) =>
+      Effect.gen(function* () {
+        const caller = yield* readCaller();
+        yield* assertNotLinked(caller, "move a chat to another environment");
+        if (caller.scope.thread?.threadId === input.threadId)
+          return yield* new OrchestratorMcpFailure({
+            code: "thread_not_sendable",
+            message:
+              "An active agent cannot move its own chat. Use /move after stopping or finishing this turn.",
+          });
+        const moves = yield* ThreadHandoff.ThreadHandoff;
+        return yield* moves
+          .start(input)
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestratorMcpFailure({ code: "thread_not_sendable", message: cause.message }),
+            ),
+          );
+      }),
+  ),
   orchestrator_capabilities: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const scope = yield* McpInvocationContext.McpInvocationContext;

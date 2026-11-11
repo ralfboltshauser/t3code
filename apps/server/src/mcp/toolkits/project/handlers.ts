@@ -1,3 +1,4 @@
+import * as HandoffImport from "../../../peer/handoff/HandoffImport.ts";
 import {
   CommandId,
   MessageId,
@@ -84,6 +85,15 @@ const access = Effect.gen(function* () {
   return yield* Project.ProjectService;
 });
 export const layer = McpToolAccess.toLayer(ProjectToolkit, {
+  t3_thread_import: McpToolAccess.startsThreads(
+    (input) => input,
+    (input, { runtimeMode, interactionMode, linkOrigin }) =>
+      Effect.gen(function* () {
+        const imports = yield* HandoffImport.HandoffImport;
+        return yield* imports.importThread({ ...input, runtimeMode, interactionMode, linkOrigin });
+      }),
+    "stamped",
+  ),
   t3_thread_launch: McpToolAccess.startsThreads(
     (input) => input,
     (input, { runtimeMode, interactionMode, linkOrigin }) =>

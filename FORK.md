@@ -20,6 +20,32 @@ feature. Daily maintenance inspects upstream without publishing.
 
 ## Intentional differences
 
+Idle independent chats can move to a linked machine through `/move`, the web chat
+menu or palette, and the native move screen. Move recent portable text and captured
+Git work into an operation-owned destination worktree, with optional continuation;
+blank moves never start a provider turn. Keep the source fenced during uncertainty,
+replay the original import/continuation receipt, retain source files, and use a fresh
+operation for return moves. No active/deferred self-handoff or implicit process,
+attachment, credential, goal, schedule or watch migration. Both servers advertise
+`threadHandoffProtocol: 1`; old clients remain subject to server fencing. Do not run
+an older server against threads with pending or completed moves: it lacks that fence.
+
+Owning modules are `peer/handoff/{ThreadHandoff,HandoffImport,HandoffGit}.ts` and
+`orchestration-v2/ThreadImportService.ts`. Upstream merges must preserve native
+imported history in `thread.create`, the normal `ThreadLaunchService` setup path,
+workspace admission/queued-start fences in `Orchestrator.ts`, projection metadata,
+guarded RPCs, peer forwarding, and web/native entry points. Reconcile with upstream’s
+import/Git/handoff stack rather than retaining duplicate implementations when it lands.
+
+```sh
+vp test run apps/server/src/peer/handoff apps/server/src/orchestration-v2/ThreadImportService.test.ts packages/client-runtime/src/state/commandPermissions.test.ts
+```
+
+These checks cover source staging preservation, Git failure cleanup, immutable
+retry identity, lost replies and changed link grants, original continuation receipts,
+blank imports, and the server’s move fence. Real peer verification uses isolated
+databases/clones; never experiment with a live chat’s ownership.
+
 New independent threads default to worktrees based on fetched `personal` through
 `t3.json`'s `defaultThreadEnvMode` and `defaultWorktreeBaseRef`. Explicit dependency
 branches and side-chat workspace inheritance remain available. Preserve base

@@ -1,3 +1,5 @@
+import * as HandoffImport from "./handoff/HandoffImport.ts";
+import * as ThreadHandoff from "./handoff/ThreadHandoff.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -205,8 +207,12 @@ const serveBox = (seen: Ref.Ref<Seen>, linkSession: Ref.Ref<string>) =>
   servePeer(
     box,
     Layer.mergeAll(
-      McpHttpServer.layerOrchestratorToolkit,
-      McpHttpServer.layerProjectRegistration,
+      McpHttpServer.layerOrchestratorToolkit.pipe(
+        Layer.provide(Layer.mock(ThreadHandoff.ThreadHandoff)({})),
+      ),
+      McpHttpServer.layerProjectRegistration.pipe(
+        Layer.provide(Layer.mock(HandoffImport.HandoffImport)({})),
+      ),
       McpHttpServer.layerThreadToolkit,
     ).pipe(
       Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
@@ -260,8 +266,12 @@ const mcpClient = McpSchema.McpServerClient.of({
 const makeLaptop = Effect.gen(function* () {
   const linking = yield* layerLinkingEnvironment(laptop).pipe(Layer.build);
   const layerHere = Layer.mergeAll(
-    McpHttpServer.layerOrchestratorToolkit,
-    McpHttpServer.layerProjectRegistration,
+    McpHttpServer.layerOrchestratorToolkit.pipe(
+      Layer.provide(Layer.mock(ThreadHandoff.ThreadHandoff)({})),
+    ),
+    McpHttpServer.layerProjectRegistration.pipe(
+      Layer.provide(Layer.mock(HandoffImport.HandoffImport)({})),
+    ),
     McpHttpServer.layerThreadToolkit,
   ).pipe(
     Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),

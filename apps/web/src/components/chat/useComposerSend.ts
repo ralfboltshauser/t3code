@@ -1,3 +1,4 @@
+import { openThreadMove } from "./threadMoveDialogState";
 import { isClearComposerCommand, parseSideChatCommand } from "@t3tools/shared/composerTrigger";
 import { armFreshSession, disarmFreshSession, readFreshSessionArm } from "./freshSessionArms";
 import {
@@ -450,6 +451,23 @@ export function useComposerSend(input: ComposerSendInput) {
         : null;
     const answeringQuestion =
       Boolean(activePendingProgress) && sendCtx?.answeringPendingUserInput !== false;
+    if (!answeringQuestion && /^\/move(?:\s|$)/.test(promptAtSend.trim())) {
+      if (promptAtSend.trim() !== "/move") {
+        toastManager.add(
+          stackedThreadToast({
+            type: "warning",
+            title: "Use /move without arguments",
+            description: "Choose a machine and next instruction in the move dialog.",
+          }),
+        );
+      } else if (activeThread && isServerThread) {
+        openThreadMove(scopeThreadRef(environmentId, activeThread.id));
+      } else
+        toastManager.add(
+          stackedThreadToast({ type: "warning", title: "Save this chat before moving it" }),
+        );
+      return;
+    }
     // Where side chats are unavailable, `/side` text can still be a literal answer.
     if (sideChatDisabledReason !== null && sideChatCommand && !answeringQuestion) {
       toastManager.add(

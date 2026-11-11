@@ -1,3 +1,5 @@
+import { openThreadMove } from "./chat/threadMoveDialogState";
+import { useThreadMoveBanner } from "./chat/ThreadMoveBanner";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -2550,6 +2552,7 @@ export default function ChatView(props: ChatViewProps) {
           },
         })
       : null;
+  const threadMoveBanner = useThreadMoveBanner(activeThreadShell);
   const composerBannerItems = (() => {
     const fallbackSelection = draftFallback?.selection;
     const defaultSelection =
@@ -2618,6 +2621,7 @@ export default function ChatView(props: ChatViewProps) {
         ...projectCloneItems,
         ...freshSessionItems,
         ...systemComposerBannerItems,
+        ...(threadMoveBanner ? [threadMoveBanner] : []),
       ];
     }
     return [
@@ -2629,6 +2633,7 @@ export default function ChatView(props: ChatViewProps) {
       ...projectCloneItems,
       ...freshSessionItems,
       ...systemComposerBannerItems,
+      ...(threadMoveBanner ? [threadMoveBanner] : []),
       branchMismatchBannerItem({
         mismatchKey: activeBranchMismatchKey,
         mismatch: localCheckoutBranchMismatch,
@@ -3607,19 +3612,22 @@ export default function ChatView(props: ChatViewProps) {
                                 canResume={resumableRunId !== null || hasHeldQueuedRuns}
                                 isRevertingCheckpoint={isRevertingCheckpoint}
                                 sendDisabledReason={
-                                  !canOperateThread
-                                    ? "This connection cannot change threads."
-                                    : isEnvironmentChanging
-                                      ? "Preparing machine"
-                                      : isRevertingCheckpoint
-                                        ? "Rewinding conversation"
-                                        : feedbackUploading
-                                          ? "Sending feedback"
-                                          : threadDetailLoading
-                                            ? "Messages loading"
-                                            : worktreeSetupBlocksSend
-                                              ? "Preparing worktree"
-                                              : projectCloneSendBlockReason
+                                  activeThread?.handoff?.state === "departing" ||
+                                  activeThread?.handoff?.state === "departed"
+                                    ? "This chat is moving or has moved. Use its move status above."
+                                    : !canOperateThread
+                                      ? "This connection cannot change threads."
+                                      : isEnvironmentChanging
+                                        ? "Preparing machine"
+                                        : isRevertingCheckpoint
+                                          ? "Rewinding conversation"
+                                          : feedbackUploading
+                                            ? "Sending feedback"
+                                            : threadDetailLoading
+                                              ? "Messages loading"
+                                              : worktreeSetupBlocksSend
+                                                ? "Preparing worktree"
+                                                : projectCloneSendBlockReason
                                 }
                                 isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
                                 bannerItems={
@@ -3632,6 +3640,19 @@ export default function ChatView(props: ChatViewProps) {
                                 onToggleKeepFullHistory={toggleKeepFullHistoryStable}
                                 sideChatAvailable={sideChat.available}
                                 sideChatDisabledReason={sideChatDisabledReason}
+                                onMove={
+                                  isServerThread &&
+                                  activeThreadId &&
+                                  !embedded &&
+                                  activeThread?.handoff?.state !== "departing" &&
+                                  activeThread?.handoff?.state !== "departed" &&
+                                  serverConfig?.environment.capabilities.threadHandoffProtocol === 1
+                                    ? () =>
+                                        openThreadMove(
+                                          scopeThreadRef(environmentId, activeThreadId),
+                                        )
+                                    : undefined
+                                }
                                 onFreshSession={
                                   freshSessionCommandAvailable ? armFreshSessionStable : undefined
                                 }

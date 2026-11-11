@@ -1,3 +1,4 @@
+import * as HandoffImport from "../../../peer/handoff/HandoffImport.ts";
 import { McpAttachmentInput } from "../attachment/input.ts";
 import {
   NonNegativeInt,
@@ -17,6 +18,8 @@ import {
   OrchestratorMcpClientRequestId,
   OrchestratorMcpEnvironmentTarget,
   OrchestratorMcpFailure,
+  OrchestratorMcpThreadImportInput,
+  OrchestratorMcpThreadImportResult,
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
 } from "@t3tools/contracts";
@@ -178,8 +181,20 @@ const ThreadLaunchTool = Tool.make("t3_thread_launch", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
+const ThreadImportTool = Tool.make("t3_thread_import", {
+  ...shared,
+  description:
+    "Receive portable conversation history and Git work from another T3 environment. source identifies one immutable import: retries return its original thread and continuation; changed input is refused. Without continuationPrompt no agent turn starts. This does not transfer native sessions, chat attachments, or credentials.",
+  parameters: OrchestratorMcpThreadImportInput,
+  success: OrchestratorMcpThreadImportResult,
+  dependencies: [...shared.dependencies, HandoffImport.HandoffImport],
+})
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.OpenWorld, true);
+
 export const ProjectToolkit = Toolkit.make(
   ThreadLaunchTool,
+  ThreadImportTool,
   ProjectListTool,
   ProjectReadTool,
   ProjectCreateTool,

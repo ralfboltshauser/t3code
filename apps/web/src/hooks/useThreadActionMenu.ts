@@ -1,3 +1,4 @@
+import { openThreadMove } from "../components/chat/threadMoveDialogState";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
@@ -29,6 +30,7 @@ import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope } from "../state/session";
 import {
   readEnvironmentServerConfigLoaded,
+  readEnvironmentSupportsThreadMove,
   readEnvironmentSupportsAutoSettleOptOut,
   readThreadShell,
   useProjects,
@@ -139,6 +141,10 @@ export function useThreadActionMenu(input: {
       const items = buildThreadActionMenuItems({
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         canFind: onFind !== undefined,
+        canMove:
+          readEnvironmentSupportsThreadMove(threadRef.environmentId) &&
+          thread.handoff?.state !== "departing" &&
+          thread.handoff?.state !== "departed",
         branch: thread.branch ?? null,
         projectFilter: null,
         isPinned: thread.pinnedAt != null,
@@ -193,6 +199,9 @@ export function useThreadActionMenu(input: {
         }
       };
       switch (action) {
+        case "move":
+          openThreadMove(threadRef);
+          break;
         case "find":
           onFind?.(threadRef);
           return;

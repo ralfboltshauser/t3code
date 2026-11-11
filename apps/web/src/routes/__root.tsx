@@ -1,3 +1,4 @@
+import { ThreadMoveDialogHost } from "../components/chat/ThreadMoveDialog";
 import { loadSidebarProfiles, sidebarProfilesActive } from "../sidebarProfiles";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -193,6 +194,7 @@ function RootRouteBranch() {
       <GuestShareDialogHost />
       <ProjectCloneToastCoordinator />
       <AddProjectToMachineDialogHost />
+      <ThreadMoveDialogHost />
       <UseInAnotherAppDialogHost />
       {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
     </>

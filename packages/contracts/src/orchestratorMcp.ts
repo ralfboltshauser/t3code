@@ -36,12 +36,15 @@ import { secretRequestPageUrl } from "./secretRequest.ts";
 import { hasOnlyPairedSurrogates } from "./threadMetadataMcp.ts";
 import { ThreadTitleRegeneration } from "./threadTitle.ts";
 import {
+  OrchestrationV2ImportedMessage,
+  OrchestrationV2ImportedMessages,
   OrchestrationV2Actor,
   OrchestrationV2CreationSource,
   OrchestrationV2RunStatus,
   OrchestrationV2TurnItemStatus,
 } from "./orchestrationV2.ts";
 import { ProviderOptionSelection, ProviderOptionSelectionValue } from "./model.ts";
+import { ModelSelection } from "./modelSelection.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 
 const OrchestratorMcpPrompt = TrimmedNonEmptyString.check(Schema.isMaxLength(120_000));
@@ -642,6 +645,42 @@ export const OrchestratorMcpEnvironmentLinksResult = Schema.Struct({
 });
 export type OrchestratorMcpEnvironmentLinksResult =
   typeof OrchestratorMcpEnvironmentLinksResult.Type;
+
+export const OrchestratorMcpImportedMessage = OrchestrationV2ImportedMessage;
+export type OrchestratorMcpImportedMessage = typeof OrchestratorMcpImportedMessage.Type;
+export const OrchestratorMcpThreadImportInput = Schema.Struct({
+  source: Schema.Struct({
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+    handoffId: TrimmedNonEmptyString.check(Schema.isMaxLength(128)),
+  }),
+  projectId: ProjectId,
+  title: OrchestratorMcpTitle,
+  modelSelection: ModelSelection,
+  sourceProviderDriver: Schema.optional(ProviderDriverKind),
+  runtimeMode: Schema.optional(RuntimeMode),
+  interactionMode: Schema.optional(ProviderInteractionMode),
+  worktreePath: Schema.optional(TrimmedNonEmptyString),
+  branch: Schema.optional(TrimmedNonEmptyString),
+  bundle: Schema.optional(
+    Schema.Struct({
+      attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
+      tip: TrimmedNonEmptyString.check(Schema.isPattern(/^[a-f0-9]{40,64}$/)),
+      snapshot: TrimmedNonEmptyString.check(Schema.isPattern(/^[a-f0-9]{40,64}$/)),
+      relativeCwd: Schema.String.check(Schema.isMaxLength(4096)),
+    }),
+  ),
+  messages: OrchestrationV2ImportedMessages,
+  continuationPrompt: Schema.optional(OrchestratorMcpPrompt),
+});
+export type OrchestratorMcpThreadImportInput = typeof OrchestratorMcpThreadImportInput.Type;
+export const OrchestratorMcpThreadImportResult = Schema.Struct({
+  threadId: ThreadId,
+  projectId: ProjectId,
+  created: Schema.Boolean,
+  runId: Schema.NullOr(RunId),
+});
+export type OrchestratorMcpThreadImportResult = typeof OrchestratorMcpThreadImportResult.Type;
 
 export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
   parentThreadId: Schema.NullOr(ThreadId),

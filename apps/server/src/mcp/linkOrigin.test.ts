@@ -1,3 +1,5 @@
+import * as HandoffImport from "../peer/handoff/HandoffImport.ts";
+import * as ThreadHandoff from "../peer/handoff/ThreadHandoff.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -114,9 +116,13 @@ const layerLaunches = Layer.effect(
 );
 
 const layerTools = Layer.mergeAll(
-  McpHttpServer.layerOrchestratorToolkit,
+  McpHttpServer.layerOrchestratorToolkit.pipe(
+    Layer.provide(Layer.mock(ThreadHandoff.ThreadHandoff)({})),
+  ),
   McpHttpServer.layerThreadToolkit,
-  McpHttpServer.layerProjectRegistration,
+  McpHttpServer.layerProjectRegistration.pipe(
+    Layer.provide(Layer.mock(HandoffImport.HandoffImport)({})),
+  ),
 ).pipe(
   Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
   Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),

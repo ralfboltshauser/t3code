@@ -89,6 +89,10 @@ export interface ThreadLaunchInput {
   readonly interactionMode: ProviderInteractionMode;
   readonly workspaceStrategy: ThreadLaunchWorkspaceStrategy;
   readonly initialMessage?: ThreadLaunchInitialMessage;
+  readonly importedConversation?: Extract<
+    import("@t3tools/contracts").OrchestrationV2Command,
+    { type: "thread.create" }
+  >["importedConversation"];
   readonly importedNativeThread?: {
     readonly ref: {
       readonly driver: ProviderDriverKind;
@@ -942,6 +946,9 @@ const make = Effect.gen(function* () {
                 interactionMode: input.interactionMode,
                 branch: initialBranch,
                 worktreePath: initialWorktreePath,
+                ...(input.importedConversation === undefined
+                  ? {}
+                  : { importedConversation: input.importedConversation }),
                 ...(input.importedNativeThread === undefined
                   ? {}
                   : { importedNativeThread: input.importedNativeThread }),
@@ -966,6 +973,20 @@ const make = Effect.gen(function* () {
             .threadId ?? candidateThreadId;
         if (project.id !== input.projectId) {
           return yield* mapError(input, "resolve-project", threadId)("Project identity changed.");
+        }
+        if (input.importedConversation?.origin) {
+          const imported = yield* threads
+            .getThreadShell(threadId)
+            .pipe(Effect.mapError(mapError(input, "create-thread", threadId)));
+          if (
+            imported?.importOrigin?.fingerprint !== input.importedConversation.origin.fingerprint ||
+            imported.linkOrigin?.sessionId !== input.linkOrigin?.sessionId
+          )
+            return yield* mapError(
+              input,
+              "create-thread",
+              threadId,
+            )("This move was accepted with different contents or permissions.");
         }
         let runId: RunId | null = null;
         let messageSequence: number | undefined;

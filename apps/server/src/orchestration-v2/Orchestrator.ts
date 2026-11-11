@@ -1,3 +1,4 @@
+import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import type {
   OrchestrationV2ThreadLinkMetadata,
   GuestShareId,
@@ -73,6 +74,7 @@ import {
   RuntimeMode,
   ThreadLinkedPullRequest,
   ThreadId,
+  type ProjectId,
   TurnItemId,
   TrimmedNonEmptyString,
   managedRuntimeModeCeilingMessage,
@@ -276,6 +278,23 @@ export class OrchestratorSubagentThreadReadOnlyError extends Schema.TaggedError<
   }
 }
 
+/** The thread is moving, or has moved, to a linked environment and takes no new turns here. */
+export class OrchestratorThreadMovedError extends Schema.TaggedError<OrchestratorThreadMovedError>()(
+  "OrchestratorThreadMovedError",
+  {
+    commandId: CommandId,
+    threadId: ThreadId,
+    label: Schema.String,
+    state: Schema.Literals(["departing", "departed"]),
+  },
+) {
+  override get message(): string {
+    return this.state === "departed"
+      ? `This thread moved to ${this.label}. Continue it there.`
+      : `This thread is moving to ${this.label}.`;
+  }
+}
+
 export class OrchestratorThreadAboveModeLimitError extends Schema.TaggedError<OrchestratorThreadAboveModeLimitError>()(
   "OrchestratorThreadAboveModeLimitError",
   {
@@ -354,6 +373,7 @@ export const OrchestratorV2Error = Schema.Union([
   OrchestratorCommandPreviouslyRejectedError,
   OrchestratorCommandIdConflictError,
   OrchestratorSubagentThreadReadOnlyError,
+  OrchestratorThreadMovedError,
   OrchestratorThreadAboveModeLimitError,
   OrchestratorRuntimeModeAboveCeilingError,
 ]);
@@ -610,6 +630,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "checkpoint.rollback.fail":
     case "thread.background-work.settle":
     case "thread.interrupt.unresponsive":
+    case "thread.handoff.update":
     case "thread.stop":
     case "provider.switch":
       return command.threadId;
@@ -1123,6 +1144,20 @@ function lastDeliveredRunForProviderThread(
   );
 }
 
+const workspaceWriteCommands = new Set<string>([
+  "message.dispatch",
+  "prepared-run.release",
+  "prepared-run.retry",
+  "queued-run.start",
+  "queue.resume",
+  "queued-message.promote-to-steer",
+  "checkpoint.rollback",
+  "thread.project.adopt-folder",
+  "provider.switch",
+  "delegated_task.request",
+  "delegated_task.remote.request",
+]);
+
 const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(function* () {
   const checkpointService = yield* CheckpointServiceV2;
   const commandPolicy = yield* CommandPolicyV2;
@@ -1158,7 +1193,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const runtimePolicy = yield* RuntimePolicyV2;
   const threadForkService = yield* ThreadForkServiceV2;
+  const isWithinWorkspace = (root: string, cwd: string) => {
+    const relative = path.relative(root, cwd);
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  };
+  const workspacePath = Effect.fn("Orchestrator.workspacePath")(
+    function* (thread: Pick<OrchestrationV2AppThread, "id" | "projectId" | "worktreePath">) {
+      const project = yield* projects.get(thread.projectId);
+      if (Option.isNone(project))
+        return yield* new OrchestratorProjectionError({
+          threadId: thread.id,
+          cause: "The workspace project no longer exists.",
+        });
+      return yield* fileSystem.realPath(thread.worktreePath ?? project.value.workspaceRoot);
+    },
+    (effect, thread) =>
+      effect.pipe(
+        Effect.mapError((cause) => new OrchestratorProjectionError({ threadId: thread.id, cause })),
+      ),
+  );
+
   const threadDispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+  const workspaceAdmission = yield* KeyedLock.make<ProjectId>();
   // Read once: the policy is fixed for the server's life, and dispatch takes it as an input.
   const { managedPolicy } = serverSettings;
   const runtimeModeCeiling: RuntimeModeCeiling | undefined =
@@ -1898,6 +1954,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       if (
         projection.thread.archivedAt !== null ||
         projection.thread.deletedAt !== null ||
+        projection.thread.handoff?.state === "departing" ||
+        projection.thread.handoff?.state === "departed" ||
         projection.runs.some(isActiveRun)
       ) {
         return;
@@ -3177,6 +3235,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       branch: command.branch,
       worktreePath: command.worktreePath,
       activeProviderThreadId: null,
+      ...(command.importedConversation === undefined
+        ? {}
+        : {
+            historyOrigin: "v1_import" as const,
+            ...(command.importedConversation.origin === undefined
+              ? {}
+              : { importOrigin: command.importedConversation.origin }),
+          }),
       pullRequests: [],
       ...(command.linkOrigin === undefined ? {} : { linkOrigin: command.linkOrigin }),
       // Only stamped work names a remote parent, so a client cannot claim one.
@@ -4831,6 +4897,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       );
     // Only side chat forks lock the source; validate the modes copied here, not an earlier read.
     yield* refuseAboveDispatchModeLimit(command, command.sourceThreadId, sourceProjection.thread);
+    if (
+      sourceProjection.thread.handoff?.state === "departing" ||
+      sourceProjection.thread.handoff?.state === "departed"
+    )
+      return yield* new OrchestratorThreadMovedError({
+        commandId: command.commandId,
+        threadId: command.sourceThreadId,
+        label: sourceProjection.thread.handoff.label,
+        state: sourceProjection.thread.handoff.state,
+      });
     if (command.sideChat === true && sourceProjection.thread.deletedAt !== null) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
@@ -4958,6 +5034,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       );
     // The source is unlocked; validate the modes copied here, not an earlier read.
     yield* refuseAboveDispatchModeLimit(command, command.sourceThreadId, sourceProjection.thread);
+    if (
+      sourceProjection.thread.handoff?.state === "departing" ||
+      sourceProjection.thread.handoff?.state === "departed"
+    )
+      return yield* new OrchestratorThreadMovedError({
+        commandId: command.commandId,
+        threadId: command.sourceThreadId,
+        label: sourceProjection.thread.handoff.label,
+        state: sourceProjection.thread.handoff.state,
+      });
     const targetProjection = yield* projectionStore
       .getThreadRecords(command.targetThreadId, ["runs", "contextTransfers"])
       .pipe(
@@ -6790,7 +6876,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const latestHandoffRun = projection.runs.findLast(isHandoffSourceRun);
     const legacyImportItems =
       projection.thread.historyOrigin === "v1_import" && contextBoundary === 0
-        ? yield* readHandoffItems(command.threadId, [null])
+        ? (yield* Ref.get(events)).some(
+            (event) => event.threadId === command.threadId && event.type === "thread.created",
+          )
+          ? projection.turnItems.filter((item) => item.runId === null)
+          : yield* readHandoffItems(command.threadId, [null])
         : [];
     const isProviderSwitch =
       activeProviderThread !== undefined &&
@@ -8661,6 +8751,102 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       payload: turnItem,
     });
   });
+
+  /** Moves a thread through a handoff to a linked environment; see the command. */
+  const dispatchThreadHandoffUpdate = Effect.fn("orchestrationV2.dispatch.threadHandoffUpdate")(
+    function* (
+      command: Extract<OrchestrationV2InternalCommand, { readonly type: "thread.handoff.update" }>,
+      events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+    ) {
+      const projection = yield* projectionStore
+        .getThreadRecords(command.threadId, [
+          "runs",
+          "runtimeRequests",
+          "subagents",
+          "providerThreads",
+        ])
+        .pipe(
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+          ),
+        );
+      const thread = projection.thread;
+      yield* refuseAboveDispatchModeLimit(command, thread.id, thread);
+      const reject = (cause: string) =>
+        new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause,
+        });
+      if (thread.deletedAt !== null) return yield* reject(`Thread ${thread.id} is deleted.`);
+      const current = thread.handoff?.state ?? null;
+      if (current !== command.expected) {
+        return yield* reject(
+          current === null
+            ? "This thread is not being moved."
+            : `This thread's move is ${current}, not ${command.expected ?? "absent"}.`,
+        );
+      }
+      const next = command.handoff?.state ?? null;
+      if (
+        next === "departing" &&
+        (projection.providerThreads.some(
+          (providerThread) => providerThread.goal?.status === "active",
+        ) ||
+          thread.pullRequests?.some((link) => link.watch != null) ||
+          threadHasUnfinishedWork(projection) ||
+          projection.subagents.some((task) =>
+            ["pending", "running", "waiting"].includes(task.status),
+          ))
+      ) {
+        return yield* reject("A thread moves only while no turn runs or waits on it.");
+      }
+      if (next === "departing") {
+        const snapshot = yield* projectionStore
+          .getShellSnapshot()
+          .pipe(
+            Effect.mapError(
+              (cause) => new OrchestratorProjectionError({ threadId: thread.id, cause }),
+            ),
+          );
+        const cwd =
+          command.handoff?.state === "departing" && command.handoff.workspaceRoot
+            ? command.handoff.workspaceRoot
+            : yield* workspacePath(thread);
+        for (const other of snapshot.threads.filter(
+          (candidate) => candidate.projectId === thread.projectId,
+        )) {
+          const active = ["running", "starting", "preparing", "waiting", "queued"].includes(
+            other.status ?? "",
+          );
+          const unsettled = yield* effectOutbox
+            .hasUnsettledForThread(other.id)
+            .pipe(Effect.mapError((cause) => reject(cause.message)));
+          if (!active && !unsettled) continue;
+          if (isWithinWorkspace(cwd, yield* workspacePath(other)))
+            return yield* reject(
+              "Wait for workspace turns, checkpointing and background effects to finish before moving.",
+            );
+        }
+      }
+      const now = yield* DateTime.now;
+      const { handoff: _previous, ...rest } = thread;
+      yield* emit(
+        events,
+        command,
+      )({
+        type: "thread.metadata-updated",
+        threadId: command.threadId,
+        providerInstanceId: thread.providerInstanceId,
+        occurredAt: now,
+        payload: {
+          ...rest,
+          ...(command.handoff === null ? {} : { handoff: command.handoff }),
+          updatedAt: now,
+        },
+      });
+    },
+  );
 
   /**
    * Records a task that runs in a linked environment on its parent: the
@@ -13519,9 +13705,152 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }
       | undefined;
     let updateDelegatedCompletionOnlyRunId: RunId | undefined;
+    if (command.type === "thread.delete") {
+      const thread = yield* projectionStore
+        .getThread(command.threadId)
+        .pipe(
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+          ),
+        );
+      if (thread.handoff?.state === "departing")
+        return yield* new OrchestratorThreadMovedError({
+          commandId: command.commandId,
+          threadId: thread.id,
+          label: thread.handoff.label,
+          state: "departing",
+        });
+    }
+
+    if (workspaceWriteCommands.has(command.type)) {
+      const threadId = commandThreadId(command);
+      const thread = yield* projectionStore
+        .getThread(threadId)
+        .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })));
+      let owner =
+        thread.handoff?.state === "departing" || thread.handoff?.state === "departed"
+          ? thread
+          : null;
+      if (owner === null) {
+        const moving = yield* projectionStore
+          .getDepartingWorkspaces(thread)
+          .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })));
+        if (moving.length > 0) {
+          const cwd = yield* workspacePath(thread);
+          for (const candidate of moving)
+            if (
+              isWithinWorkspace(
+                candidate.handoff?.state === "departing" && candidate.handoff.workspaceRoot
+                  ? candidate.handoff.workspaceRoot
+                  : yield* workspacePath(candidate),
+                cwd,
+              )
+            ) {
+              owner = candidate;
+              break;
+            }
+        }
+      }
+      if (owner?.handoff)
+        return yield* new OrchestratorThreadMovedError({
+          commandId: command.commandId,
+          threadId,
+          label: owner.handoff.label,
+          state: owner.handoff.state === "departed" ? "departed" : "departing",
+        });
+    }
     switch (command.type) {
       case "thread.create":
         yield* dispatchThreadCreate(command, events);
+        if (command.importedConversation !== undefined) {
+          const importedAt = yield* DateTime.now;
+          for (const [index, message] of command.importedConversation.messages.entries()) {
+            const messageId = MessageId.make(`${command.threadId}:history:${index}`);
+            const at = DateTime.makeUnsafe(message.createdAt);
+            const common = {
+              id: TurnItemId.make(`${command.threadId}:history:${index}`),
+              threadId: command.threadId,
+              runId: null,
+              nodeId: null,
+              providerThreadId: null,
+              providerTurnId: null,
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal: index + 1,
+              status: "completed" as const,
+              title: null,
+              startedAt: at,
+              completedAt: at,
+              updatedAt: importedAt,
+            };
+            yield* emit(
+              events,
+              command,
+            )({
+              type: "message.updated",
+              threadId: command.threadId,
+              occurredAt: importedAt,
+              payload: {
+                id: messageId,
+                threadId: command.threadId,
+                runId: null,
+                nodeId: null,
+                createdBy: message.role === "user" ? "user" : "agent",
+                creationSource: "server",
+                role: message.role,
+                text: message.text,
+                attachments: [],
+                streaming: false,
+                createdAt: at,
+                updatedAt: importedAt,
+              },
+            });
+            yield* emit(
+              events,
+              command,
+            )({
+              type: "turn-item.updated",
+              threadId: command.threadId,
+              occurredAt: importedAt,
+              payload:
+                message.role === "user"
+                  ? {
+                      ...common,
+                      type: "user_message",
+                      messageId,
+                      text: message.text,
+                      attachments: [],
+                      createdBy: "user",
+                      creationSource: "server",
+                      inputIntent: "turn_start",
+                    }
+                  : {
+                      ...common,
+                      type: "assistant_message",
+                      messageId,
+                      text: message.text,
+                      streaming: false,
+                    },
+            });
+          }
+          if (command.importedConversation.continuationPrompt !== undefined) {
+            yield* dispatchMessage(
+              {
+                type: "message.dispatch",
+                commandId: command.commandId,
+                threadId: command.threadId,
+                messageId: MessageId.make(`${command.threadId}:continuation`),
+                text: command.importedConversation.continuationPrompt,
+                attachments: [],
+                dispatchMode: { type: "start_immediately" },
+                createdBy: command.createdBy,
+                creationSource: command.creationSource,
+              },
+              events,
+              effects,
+            );
+          }
+        }
         break;
       case "thread.visit":
         yield* dispatchThreadVisit(command, events);
@@ -13672,6 +14001,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return yield* new OrchestratorSubagentThreadReadOnlyError({
             commandId: command.commandId,
             threadId: command.threadId,
+          });
+        }
+        // A thread moving away, or gone, takes no new turns here.
+        if (thread.handoff?.state === "departing" || thread.handoff?.state === "departed") {
+          return yield* new OrchestratorThreadMovedError({
+            commandId: command.commandId,
+            threadId: command.threadId,
+            label: thread.handoff.label,
+            state: thread.handoff.state,
           });
         }
         const guestSend =
@@ -13867,6 +14205,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         break;
       case "delegated_task.remote.request":
         yield* dispatchRemoteDelegatedTaskRequest(command, events);
+        break;
+      case "thread.handoff.update":
+        yield* dispatchThreadHandoffUpdate(command, events);
         break;
       case "delegated_task.remote.complete":
         yield* dispatchRemoteDelegatedTaskComplete(command, events);
@@ -14197,7 +14538,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   }, withCommandMetrics);
 
   // dispatchWithReceiptEffect owns the dispatch span; this wrapper selects the thread locks.
-  const dispatchWithReceipt = Effect.fnUntraced(function* (command: OrchestrationV2ServerCommand) {
+  const dispatchWithThreadLocks = Effect.fnUntraced(function* (
+    command: OrchestrationV2ServerCommand,
+  ) {
     const dispatch = threadDispatch.withLock(
       commandThreadId(command),
       dispatchWithReceiptEffect(command),
@@ -14243,6 +14586,25 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     return yield* parentThreadId === undefined
       ? dispatch
       : threadDispatch.withLock(parentThreadId, dispatch);
+  });
+
+  // Admission and a move's fence commit under the same project lock; provider work runs outside it.
+  const dispatchWithReceipt = Effect.fnUntraced(function* (command: OrchestrationV2ServerCommand) {
+    if (
+      !workspaceWriteCommands.has(command.type) &&
+      command.type !== "thread.fork" &&
+      command.type !== "thread.merge_back" &&
+      !(command.type === "thread.handoff.update" && command.handoff?.state === "departing")
+    )
+      return yield* dispatchWithThreadLocks(command);
+    const threadId =
+      command.type === "thread.fork" || command.type === "thread.merge_back"
+        ? command.sourceThreadId
+        : commandThreadId(command);
+    const thread = yield* findThread(threadId);
+    return yield* thread === null
+      ? dispatchWithThreadLocks(command)
+      : workspaceAdmission.withLock(thread.projectId, dispatchWithThreadLocks(command));
   });
 
   const handleRunUpdate = Effect.fn("Orchestrator.handleRunUpdate")(

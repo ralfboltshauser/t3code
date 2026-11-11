@@ -139,6 +139,40 @@ export const OrchestrationV2DelegatedFrom = Schema.Struct({
 });
 export type OrchestrationV2DelegatedFrom = typeof OrchestrationV2DelegatedFrom.Type;
 
+/**
+ * A thread moving to a linked environment. `departing` is moving now and
+ * takes no new runs; `departed` lives on there as `threadId`, and this copy
+ * only reads. Cleared when a move fails, with the reason in `lastError`.
+ */
+export const OrchestrationV2ThreadHandoff = Schema.Union([
+  Schema.Struct({
+    state: Schema.Literal("departing"),
+    handoffId: TrimmedNonEmptyString,
+    environmentId: EnvironmentId,
+    label: Schema.String,
+    lastError: Schema.optional(Schema.String),
+    workspaceRoot: Schema.optional(Schema.String),
+    captureReady: Schema.optional(Schema.Boolean),
+    sent: Schema.optional(Schema.Boolean),
+  }),
+  Schema.Struct({
+    state: Schema.Literal("departed"),
+    handoffId: TrimmedNonEmptyString,
+    environmentId: EnvironmentId,
+    label: Schema.String,
+    threadId: ThreadId,
+    link: Schema.optional(Schema.String),
+  }),
+  Schema.Struct({
+    state: Schema.Literal("failed"),
+    handoffId: TrimmedNonEmptyString,
+    environmentId: EnvironmentId,
+    label: Schema.String,
+    lastError: Schema.String,
+  }),
+]);
+export type OrchestrationV2ThreadHandoff = typeof OrchestrationV2ThreadHandoff.Type;
+
 export const OrchestrationV2NativeRefStrength = Schema.Literals(["strong", "weak", "none"]);
 export type OrchestrationV2NativeRefStrength = typeof OrchestrationV2NativeRefStrength.Type;
 
@@ -442,6 +476,14 @@ const LenientThreadOpens = Schema.NullOr(OrchestrationV2ThreadOpens).pipe(
   Schema.catchDecoding(() => Effect.succeedSome(null)),
 );
 
+export const OrchestrationV2ImportOrigin = Schema.Struct({
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  handoffId: TrimmedNonEmptyString,
+  fingerprint: Schema.String,
+});
+export type OrchestrationV2ImportOrigin = typeof OrchestrationV2ImportOrigin.Type;
+
 export const OrchestrationV2AppThread = Schema.Struct({
   ...OrchestrationV2CreationFields,
   id: ThreadId,
@@ -458,8 +500,10 @@ export const OrchestrationV2AppThread = Schema.Struct({
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
+  importOrigin: Schema.optional(OrchestrationV2ImportOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
+  handoff: Schema.optional(OrchestrationV2ThreadHandoff),
   lineage: OrchestrationV2AppThreadLineage,
   forkedFrom: Schema.NullOr(
     Schema.Union([
@@ -2116,8 +2160,10 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   forkedFrom: Schema.NullOr(OrchestrationV2AppThread.fields.forkedFrom),
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
+  importOrigin: Schema.optional(OrchestrationV2ImportOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
+  handoff: Schema.optional(OrchestrationV2ThreadHandoff),
   latestRunId: Schema.NullOr(RunId),
   latestRunRequestedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   latestRunStartedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
@@ -2931,6 +2977,28 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
 ]);
 export type OrchestrationV2DomainEventJson = typeof OrchestrationV2DomainEventJson.Type;
 
+export const OrchestrationV2ImportedMessage = Schema.Struct({
+  role: Schema.Literals(["user", "assistant"]),
+  text: Schema.String.check(Schema.isMaxLength(200_000)),
+  createdAt: IsoDateTime.check(
+    Schema.makeFilter(
+      (value) => DateTime.make(value)._tag === "Some" || "Invalid imported timestamp.",
+    ),
+  ),
+});
+export type OrchestrationV2ImportedMessage = typeof OrchestrationV2ImportedMessage.Type;
+
+export const OrchestrationV2ImportedMessages = Schema.Array(OrchestrationV2ImportedMessage).check(
+  Schema.isMaxLength(2_000),
+  Schema.makeFilter(
+    (messages) =>
+      messages.reduce(
+        (total, message) => total + new TextEncoder().encode(message.text).byteLength,
+        0,
+      ) <= 2_000_000 || "Imported history exceeds 2 MB.",
+  ),
+);
+
 export const OrchestrationV2Command = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("thread.stop"),
@@ -2959,6 +3027,15 @@ export const OrchestrationV2Command = Schema.Union([
     linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
     /** Only the server sets this, with `linkOrigin`, for a linked environment's delegated task. */
     delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
+    importedConversation: Schema.optional(
+      Schema.Struct({
+        origin: Schema.optional(OrchestrationV2ImportOrigin),
+        messages: OrchestrationV2ImportedMessages,
+        continuationPrompt: Schema.optional(
+          TrimmedNonEmptyString.check(Schema.isMaxLength(120_000)),
+        ),
+      }),
+    ),
     importedNativeThread: Schema.optional(
       Schema.Struct({
         ref: Schema.Struct({
@@ -3464,6 +3541,19 @@ const OrchestrationV2InternalCommand = Schema.Union([
         notification: OrchestrationV2Notification,
       }),
     ),
+  }),
+  /**
+   * Sets where a thread is in a move to a linked environment, or clears it
+   * (`handoff: null`). Moving to `departing` requires none in
+   * progress, and `departing` requires no live or queued run, so a turn and
+   * a move never overlap. `expected` is the state this transition is from.
+   */
+  Schema.Struct({
+    type: Schema.Literal("thread.handoff.update"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    expected: Schema.NullOr(Schema.Literals(["departing", "departed", "failed"])),
+    handoff: Schema.NullOr(OrchestrationV2ThreadHandoff),
   }),
   /**
    * Records a delegated task that runs in a linked environment: the task, its

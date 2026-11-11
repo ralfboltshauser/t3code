@@ -1,3 +1,6 @@
+import * as ThreadHandoff from "./peer/handoff/ThreadHandoff.ts";
+import * as HandoffImport from "./peer/handoff/HandoffImport.ts";
+import * as HandoffGit from "./peer/handoff/HandoffGit.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Random from "effect/Random";
@@ -806,6 +809,7 @@ const layerMakeRoutes = Layer.mergeAll(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
   ),
+  Layer.effectDiscard(ThreadHandoff.ThreadHandoff.pipe(Effect.flatMap((move) => move.start_()))),
   // Follows delegated tasks running in linked environments, including after a restart.
   Layer.effectDiscard(
     RemoteDelegation.RemoteDelegation.pipe(Effect.flatMap((remote) => remote.start())),
@@ -813,6 +817,12 @@ const layerMakeRoutes = Layer.mergeAll(
 ).pipe(
   Layer.provide(
     PullRequestReviewGuideService.layer.pipe(Layer.provide(PullRequestReviewGuides.layer)),
+  ),
+  Layer.provide(
+    Layer.merge(ThreadHandoff.layer, HandoffImport.layer).pipe(
+      Layer.provideMerge(HandoffGit.layer),
+      Layer.provide(ProjectionStoreV2.layer),
+    ),
   ),
   // delegate_task to a linked environment, from /mcp and the follower above.
   Layer.provide(RemoteDelegation.layer.pipe(Layer.provide(ProjectionStoreV2.layer))),
