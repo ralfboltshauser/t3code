@@ -63,6 +63,52 @@ export const moveRetirementCaptureReason = Effect.fn("MoveRetirement.captureReas
     if (!match) return "The capture contains unsupported repository entries.";
     expected.set(match[3]!, { mode: match[1]!, oid: match[2]! });
   }
+  const admin = (yield* text(["rev-parse", "--absolute-git-dir"]))?.trim();
+  if (!admin) return "The Git administration directory could not be inspected.";
+  metadataPaths.push(admin);
+  const history = new Set<string>();
+  for (const name of yield* fs.readDirectory(admin)) {
+    const file = path.join(admin, name);
+    metadataPaths.push(file);
+    const info = yield* fs.lstat(file);
+    if (name === "logs" || name === "refs") {
+      if (info.type !== "Directory") return "Local Git administration entries need preservation.";
+      const children = yield* fs.readDirectory(file);
+      if (name === "refs" ? children.length !== 0 : children.some((child) => child !== "HEAD"))
+        return "Local Git references or recovery files remain on the source.";
+      if (children.includes("HEAD")) metadataPaths.push(path.join(file, "HEAD"));
+    } else {
+      if (
+        info.type !== "File" ||
+        !["HEAD", "commondir", "gitdir", "index", "ORIG_HEAD", "COMMIT_EDITMSG"].includes(name)
+      )
+        return "Local Git administration files remain on the source.";
+      if (name === "ORIG_HEAD") {
+        const oid = (yield* fs.readFileString(file)).trim();
+        if (!/^[a-f0-9]{40,64}$/.test(oid))
+          return "The original Git head needs manual preservation.";
+        history.add(oid);
+      }
+      if (
+        name === "COMMIT_EDITMSG" &&
+        (yield* fs.readFileString(file)) !== (yield* text(["log", "-1", "--format=format:%B"]))
+      )
+        return "An uncommitted Git message remains on the source.";
+    }
+  }
+  const branch = (yield* text(["symbolic-ref", "HEAD"]))?.trim();
+  if (!branch) return "The source branch could not be inspected.";
+  for (const ref of ["HEAD", branch]) {
+    const reflog = yield* text(["reflog", "show", "--format=%H", ref]);
+    if (reflog === null) return "The local reflog exceeds the inspection limit.";
+    for (const oid of reflog.split("\n").filter(Boolean)) history.add(oid);
+  }
+  if (history.size > 1000) return "The local reflog needs manual review before cleanup.";
+  if (
+    history.size > 0 &&
+    (yield* text(["rev-list", "--max-count=1", ...history, "--not", "--all", snapshot])) !== ""
+  )
+    return "Local Git recovery history is not retained by a shared reference. Its checkout and branch were kept.";
   let count = 0;
   const visit = Effect.fn("MoveRetirement.inspectFiles")(function* (
     relative: string,

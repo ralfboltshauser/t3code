@@ -60,11 +60,11 @@ and writer/effect checks, unchanged H/index and exact raw snapshot bytes gate
 force removal. Compare-delete only a proven owned unused branch at captured H.
 Keep legacy/project/shared/subdirectory sources and staged, ignored, filtered,
 sparse or unsupported local state; never replace these protections with age rules
-or blanket dependency-directory deletion.
+or blanket dependency-directory deletion. Retain unknown worktree administration
+files and reflog-only history unless shared refs or the outgoing snapshot retain it.
 Only exclusive disposable move paths retain a workspace fence after acceptance;
 other chats must remain able to use protected project roots and shared checkouts.
-Incoming snapshots are distinct from
-post-setup checkpoints, retained through onward moves/deletion, and capped at 256
+Incoming snapshots are distinct from post-setup checkpoints, retained through onward moves/deletion, and capped at 256
 per repository without TTL eviction. Tiny receipts and unique history can grow;
 automatic cleanup does not promise backups or safety against external writers.
 
@@ -88,7 +88,7 @@ vp test run apps/server/src/peer/handoff apps/server/src/orchestration-v2/Thread
 These cover pre-setup snapshot recovery/GC, quota refusal without eviction,
 receipt-first blank/continuation replay, cross-project admission, supported raw
 capture versus staging/ignored/filter/index exceptions, replacement/late-edit
-safety, owned branch removal, restart reconciliation and immediate cleanup with
+safety, reflog/admin-file retention, owned branch removal, restart reconciliation and immediate cleanup with
 age rules off. A primary real-client pass must also prove repeated back-and-forth
 isolated moves with Replay, cleanup status/recovery controls and bounded disposable
 checkouts/branches/transport payloads, counting retained history separately.

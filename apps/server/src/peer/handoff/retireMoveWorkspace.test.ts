@@ -92,6 +92,10 @@ const fixture = Effect.fn("MoveRetirement.testFixture")(function* (id: string) {
       provenance: yield* moveWorkspaceProvenance(root),
     }),
   );
+  if (id === "committed") {
+    yield* run(root, ["add", "file.txt"]);
+    yield* run(root, ["commit", "-m", "continued work"]);
+  }
   const outgoing = yield* handoff.pack({
     cwd: root,
     handoffId: `outgoing-${id}`,
@@ -124,6 +128,7 @@ const fixture = Effect.fn("MoveRetirement.testFixture")(function* (id: string) {
 it.layer(layer)("Disposable moved workspace retirement", (it) => {
   it.effect.each([
     "portable",
+    "committed",
     "staged",
     "ignored",
     "other-owner",
@@ -133,9 +138,12 @@ it.layer(layer)("Disposable moved workspace retirement", (it) => {
     "subdirectory",
     "permissions",
     "attributes",
+    "reflog-only",
+    "admin-file",
   ])("%s retires only when every supported byte is preserved", (mode) =>
     Effect.gen(function* () {
       const repo = yield* fixture(mode);
+      const removable = mode === "portable" || mode === "committed";
       if (mode === "staged") {
         yield* repo.run(repo.root, ["add", "file.txt"]);
         yield* repo.fs.writeFileString(
@@ -168,6 +176,38 @@ it.layer(layer)("Disposable moved workspace retirement", (it) => {
           ],
         });
       }
+      if (mode === "reflog-only") {
+        const tip = (yield* repo.run(repo.root, ["rev-parse", "HEAD"])).stdout.trim();
+        yield* repo.fs.writeFileString(
+          repo.path.join(repo.root, "file.txt"),
+          "unique abandoned commit\n",
+        );
+        yield* repo.run(repo.root, ["add", "file.txt"]);
+        yield* repo.run(repo.root, ["commit", "-m", "abandoned work"]);
+        yield* repo.run(repo.root, ["reset", "--hard", tip]);
+        for (const name of ["COMMIT_EDITMSG", "ORIG_HEAD"]) {
+          const file = (yield* repo.run(repo.root, [
+            "rev-parse",
+            "--git-path",
+            name,
+          ])).stdout.trim();
+          yield* repo.fs.remove(file);
+        }
+        yield* repo.fs.writeFileString(
+          repo.path.join(repo.root, "file.txt"),
+          "received uncommitted work\n",
+        );
+      }
+      if (mode === "admin-file") {
+        const admin = (yield* repo.run(repo.root, [
+          "rev-parse",
+          "--absolute-git-dir",
+        ])).stdout.trim();
+        yield* repo.fs.writeFileString(
+          repo.path.join(admin, "private-notes"),
+          "unique local metadata\n",
+        );
+      }
       let checks = 0;
       const guard = Effect.gen(function* () {
         checks++;
@@ -186,9 +226,9 @@ it.layer(layer)("Disposable moved workspace retirement", (it) => {
             ? { ...repo.thread, worktreePath: `${repo.root}/subdirectory` }
             : repo.thread;
       const result = yield* retireMoveWorkspace(thread, guard);
-      assert.equal(result?.status, mode === "portable" ? "removed" : "kept", result?.reason);
-      assert.equal(yield* repo.fs.exists(repo.root), mode !== "portable");
-      if (mode === "portable") {
+      assert.equal(result?.status, removable ? "removed" : "kept", result?.reason);
+      assert.equal(yield* repo.fs.exists(repo.root), !removable);
+      if (removable) {
         assert.notInclude(
           (yield* repo.run(repo.receiver, ["for-each-ref", "--format=%(refname)", "refs/heads/"]))
             .stdout,
@@ -209,6 +249,17 @@ it.layer(layer)("Disposable moved workspace retirement", (it) => {
         assert.equal(
           yield* repo.fs.readFileString(repo.path.join(repo.root, "new-owner")),
           "replacement after removal\n",
+        );
+      }
+      if (mode === "reflog-only") assert.include(result?.reason ?? "", "Git recovery history");
+      if (mode === "admin-file") {
+        const admin = (yield* repo.run(repo.root, [
+          "rev-parse",
+          "--absolute-git-dir",
+        ])).stdout.trim();
+        assert.equal(
+          yield* repo.fs.readFileString(repo.path.join(admin, "private-notes")),
+          "unique local metadata\n",
         );
       }
       if (mode === "ignored")

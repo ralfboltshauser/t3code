@@ -49,7 +49,8 @@ before moving; automatic retirement assumes exclusive use by this T3 environment
 The source reports whether cleanup completed or why files were kept. Project roots,
 older workspaces, shared workspaces, subdirectory bindings, staged work, ignored
 files (including dependency installs), sparse indexes, and changed or unsupported
-files stay on the source. They are preserved data, not disposable cache. Resolve
+files stay on the source. Unreferenced Git recovery history and unknown local Git
+files also keep the source. They are preserved data, not disposable cache. Resolve
 the reported condition and run Storage cleanup again, or preserve the local work
 before explicitly removing a retained checkout with Git. Committing new source
 work after a move does not transfer it to the destination.
