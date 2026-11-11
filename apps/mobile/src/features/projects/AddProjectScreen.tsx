@@ -1462,6 +1462,7 @@ export function AddProjectDestinationScreen(props: {
     if (AsyncResult.isFailure(startResult)) {
       setError(errorMessage(Cause.squash(startResult.cause)));
     } else {
+      const { projectId } = startResult.value;
       await assignMobileCreatedProject(
         { environmentId: environment.environmentId, projectId },
         targetProfile,
@@ -1472,7 +1473,6 @@ export function AddProjectDestinationScreen(props: {
         ),
       );
       void suggestAppAccessForRemote(checkAppAccess, environment.environmentId, remoteUrl);
-      const { projectId } = startResult.value;
       // Wait for the create event; the client store otherwise falls back to the project picker and loses clone controls.
       const project = await waitForProject(
         { environmentId: environment.environmentId, projectId },

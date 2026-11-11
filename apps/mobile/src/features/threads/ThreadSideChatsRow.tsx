@@ -1,6 +1,7 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 
+import { cn } from "../../lib/cn";
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { useSideChats } from "../../state/entities";
