@@ -16,7 +16,7 @@ import {
 import { toastManager } from "./components/ui/toast";
 import { transactSidebarProfiles } from "./sidebarProfilesStorage";
 import { useProjects } from "./state/entities";
-import { getClientSettings, useBoringSidebarEnabled } from "./hooks/useSettings";
+import { getClientSettings, useClientSettings } from "./hooks/useSettings";
 
 interface ProfileState {
   document: SidebarProfilesDocument;
@@ -107,7 +107,7 @@ export function openProfileManager(projects: readonly ScopedProjectRef[] = []) {
 export function sidebarProfilesActive() {
   const { document } = useSidebarProfiles.getState();
   const settings = getClientSettings();
-  return document.enabled && (settings.boringSidebarEnabled || settings.legacySidebarEnabled);
+  return document.enabled && settings.boringSidebarEnabled;
 }
 export function currentCreationProfile() {
   const state = useSidebarProfiles.getState();
@@ -127,12 +127,12 @@ export function useProfileProjects() {
   const projects = useProjects();
   const document = useSidebarProfiles((s) => s.document);
   const activeId = useSidebarProfiles((s) => s.activeId);
-  const boring = useBoringSidebarEnabled();
+  const boring = useClientSettings((settings) => settings.boringSidebarEnabled);
   return boring ? projectsInSidebarProfile(projects, document, activeId) : projects;
 }
 export function useProfilesActive() {
   const enabled = useSidebarProfiles((s) => s.document.enabled);
-  const boring = useBoringSidebarEnabled();
+  const boring = useClientSettings((settings) => settings.boringSidebarEnabled);
   return enabled && boring;
 }
 export async function assignCreatedProject(project: ScopedProjectRef, profileId: string) {

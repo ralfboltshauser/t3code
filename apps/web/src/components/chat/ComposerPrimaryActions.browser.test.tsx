@@ -16,7 +16,6 @@ it("temporarily replaces Stop with the queued-message action while Mod is held",
     pendingAction: null,
     isRunning: true,
     canInterrupt: true,
-    showPlanFollowUpPrompt: false,
     promptHasText: false,
     isSendBusy: false,
     sendDisabledReason: null,
@@ -26,7 +25,6 @@ it("temporarily replaces Stop with the queued-message action while Mod is held",
     onSendLatestQueuedMessage,
     onPreviousPendingQuestion: () => undefined,
     onInterrupt,
-    onImplementPlanInNewThread: () => undefined,
   } satisfies ComponentProps<typeof ComposerPrimaryActions>;
   await using screen = await render(<ComposerPrimaryActions {...props} />);
   const modifier = isMacPlatform(navigator.platform) ? "Meta" : "Control";
