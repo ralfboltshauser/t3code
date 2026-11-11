@@ -167,6 +167,7 @@ export const OrchestrationV2ThreadHandoff = Schema.Union([
         root: Schema.String,
         tip: Schema.String,
         snapshot: Schema.String,
+        disposable: Schema.optional(Schema.Boolean),
         status: Schema.Literals(["pending", "kept", "removed"]),
         reason: Schema.String,
       }),

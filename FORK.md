@@ -60,7 +60,10 @@ and writer/effect checks, unchanged H/index and exact raw snapshot bytes gate
 force removal. Compare-delete only a proven owned unused branch at captured H.
 Keep legacy/project/shared/subdirectory sources and staged, ignored, filtered,
 sparse or unsupported local state; never replace these protections with age rules
-or blanket dependency-directory deletion. Incoming snapshots are distinct from
+or blanket dependency-directory deletion.
+Only exclusive disposable move paths retain a workspace fence after acceptance;
+other chats must remain able to use protected project roots and shared checkouts.
+Incoming snapshots are distinct from
 post-setup checkpoints, retained through onward moves/deletion, and capped at 256
 per repository without TTL eviction. Tiny receipts and unique history can grow;
 automatic cleanup does not promise backups or safety against external writers.

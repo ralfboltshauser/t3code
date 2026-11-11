@@ -112,6 +112,7 @@ const fixture = Effect.fn("MoveRetirement.testFixture")(function* (id: string) {
         root,
         tip: outgoing.tip,
         snapshot: outgoing.snapshot,
+        disposable: true,
         status: "pending" as const,
         reason: "Checking",
       },

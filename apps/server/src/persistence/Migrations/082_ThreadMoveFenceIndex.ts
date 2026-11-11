@@ -7,5 +7,5 @@ export default Effect.gen(function* () {
     ON orchestration_v2_projection_threads(thread_id)
     WHERE json_extract(payload_json, '$.handoff.state') = 'departing'
       OR (json_extract(payload_json, '$.handoff.state') = 'departed'
-        AND json_extract(payload_json, '$.handoff.retirement.root') IS NOT NULL)`;
+        AND json_extract(payload_json, '$.handoff.retirement.disposable') = 1)`;
 });

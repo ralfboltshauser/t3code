@@ -408,6 +408,7 @@ it.effect("seeds the first continuation and replays its original run after later
             root: realRoot,
             tip: "a".repeat(40),
             snapshot: "b".repeat(40),
+            disposable: true,
             status: "pending",
             reason: "Checking",
           },
@@ -430,6 +431,33 @@ it.effect("seeds the first continuation and replays its original run after later
         })
         .pipe(Effect.flip);
       assert.equal(refusedCreate._tag, "OrchestratorThreadMovedError");
+      const movedRoot = (yield* threads.getThreadRecords(distinct.threadId, [])).thread.handoff;
+      assert.equal(movedRoot?.state, "departed");
+      if (movedRoot?.state === "departed" && movedRoot.retirement)
+        yield* threads.dispatch({
+          type: "thread.handoff.update",
+          commandId: CommandId.make("command:move:protected-project-root"),
+          threadId: distinct.threadId,
+          expected: "departed",
+          handoff: {
+            ...movedRoot,
+            retirement: { ...movedRoot.retirement, disposable: false, status: "kept" },
+          },
+        });
+      yield* threads.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("command:move:reuse-protected-root"),
+        threadId: ThreadId.make("protected-root-owner"),
+        projectId,
+        title: "Project roots remain usable",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: realRoot,
+        createdBy: "user",
+        creationSource: "web",
+      });
       const unrelated = yield* (yield* ProjectStore.ProjectStoreV2).get(otherProjectId);
       assert.isTrue(Option.isSome(unrelated));
       if (Option.isSome(unrelated))

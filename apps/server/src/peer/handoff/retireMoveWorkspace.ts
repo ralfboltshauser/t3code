@@ -19,6 +19,10 @@ export const retireMoveWorkspace = Effect.fn("MoveRetirement.retireWorkspace")(
     if (handoff?.state !== "departed" || !handoff.retirement) return null;
     const capture = handoff.retirement;
     const keep = (reason: string) => ({ ...capture, status: "kept" as const, reason });
+    if (capture.disposable !== true)
+      return keep(
+        "This source was not created as a disposable move workspace, or another thread owns it. Its files and branches were kept.",
+      );
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const config = yield* ServerConfig.ServerConfig;

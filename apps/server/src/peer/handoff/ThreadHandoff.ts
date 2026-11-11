@@ -45,6 +45,7 @@ import * as PeerLinks from "../PeerLinks.ts";
 import * as ScheduledTasks from "../../scheduledTasks/ScheduledTaskService.ts";
 import * as Terminal from "../../terminal/Manager.ts";
 import * as HandoffGit from "./HandoffGit.ts";
+import { workspaceAdmissionPath } from "../../workspace/workspaceAdmissionPath.ts";
 
 interface StartInput {
   readonly threadId: ThreadId;
@@ -135,6 +136,45 @@ const make = Effect.gen(function* () {
     issuedAt: 0,
   });
   const operationDir = (id: string) => path.join(config.stateDir, "thread-moves", id);
+  const disposableSource = Effect.fn("ThreadHandoff.disposableSource")(
+    function* (thread: OrchestrationV2AppThread, root: string) {
+      const origin = thread.importOrigin;
+      if (
+        !origin?.incomingSnapshot ||
+        thread.worktreePath !== root ||
+        !/^[a-zA-Z0-9-]{1,128}$/.test(origin.handoffId)
+      )
+        return false;
+      const managed = yield* fs.realPath(config.worktreesDir);
+      if (path.join(managed, "moves", origin.handoffId) !== root) return false;
+      const snapshot = yield* projections.getShellSnapshot();
+      for (const other of [...snapshot.threads, ...snapshot.archivedThreads]) {
+        if (other.id === thread.id) continue;
+        const project =
+          other.worktreePath === null ? yield* projects.getById(other.projectId) : Option.none();
+        const cwd =
+          other.worktreePath ?? (Option.isSome(project) ? project.value.workspaceRoot : null);
+        if (!cwd) continue;
+        const canonical = yield* workspaceAdmissionPath(cwd).pipe(
+          Effect.provideService(FileSystem.FileSystem, fs),
+          Effect.provideService(Path.Path, path),
+        );
+        const relative = path.relative(root, canonical);
+        const inverse = path.relative(canonical, root);
+        if (
+          relative === "" ||
+          (!relative.startsWith("..") && !path.isAbsolute(relative)) ||
+          (!inverse.startsWith("..") && !path.isAbsolute(inverse)) ||
+          (thread.branch !== null &&
+            other.branch === thread.branch &&
+            other.handoff?.state !== "departed")
+        )
+          return false;
+      }
+      return true;
+    },
+    Effect.orElseSucceed(() => false),
+  );
   const pruneResolved = Effect.fn("ThreadHandoff.pruneResolved")(
     function* (handoff: OrchestrationV2ThreadHandoff) {
       if (!/^[a-zA-Z0-9-]{1,128}$/.test(handoff.handoffId)) return;
@@ -485,6 +525,7 @@ const make = Effect.gen(function* () {
                   root: handoff.workspaceRoot,
                   tip: record.input.bundle!.tip,
                   snapshot: record.input.bundle!.snapshot,
+                  disposable: yield* disposableSource(thread, handoff.workspaceRoot),
                   status: "pending" as const,
                   reason: "Checking whether the disposable source can be removed safely.",
                 },
