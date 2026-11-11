@@ -1,5 +1,6 @@
 import {
   GitCommandError,
+  CommandId,
   OrchestrationV2AppThreadJson,
   OrchestrationV2ProviderSessionJson,
 } from "@t3tools/contracts";
@@ -49,6 +50,7 @@ import { isFilesystemRoot, managedWorktreesDirectories } from "./worktreesDirect
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import { removeLinkedWorktree } from "./vcs/worktreeRemoval.ts";
 import { withWorkspaceLease } from "./workspace/workspaceLease.ts";
+import { retireMoveWorkspace } from "./peer/handoff/retireMoveWorkspace.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { isNetworkPath } from "@t3tools/shared/path";
@@ -814,6 +816,114 @@ const make = Effect.gen(function* () {
       });
   });
 
+  const cleanMovedWorktrees = Effect.fn("StorageCleanup.cleanMovedWorktrees")(function* (
+    entries: StorageCleanupReportEntry[],
+  ) {
+    const rows = yield* sql<{
+      payload_json: string;
+    }>`SELECT payload_json FROM orchestration_v2_projection_threads
+      WHERE deleted_at IS NULL AND json_extract(payload_json, '$.handoff.state') = 'departed'
+      AND json_extract(payload_json, '$.handoff.retirement.status') != 'removed'`.pipe(
+      NodeSqliteClient.readOnly,
+    );
+    for (const row of rows) {
+      const thread = yield* decodeCleanupThread(row.payload_json);
+      const handoff = thread.handoff;
+      if (handoff?.state !== "departed" || !handoff.retirement) continue;
+      const root = handoff.retirement.root;
+      const guard = Effect.gen(function* () {
+        const current = yield* projections.getThreadShell(thread.id);
+        if (
+          current?.handoff?.state !== "departed" ||
+          current.handoff.handoffId !== handoff.handoffId
+        )
+          return "Thread ownership changed before cleanup.";
+        if (hasTerminal(root) || (yield* terminals.hasWorkspaceSubprocess(root)))
+          return "An open terminal protects this workspace.";
+        const projects = yield* projectStore.list({ includeDeleted: true });
+        if (yield* containsProjectRoot(root, projects))
+          return "A project checkout uses this directory. Its files were kept.";
+        const owners = yield* sql<{
+          payload_json: string;
+        }>`SELECT payload_json FROM orchestration_v2_projection_threads WHERE thread_id != ${thread.id}`.pipe(
+          NodeSqliteClient.readOnly,
+        );
+        for (const owner of owners) {
+          const other = yield* decodeCleanupThread(owner.payload_json);
+          const project = projects.find((entry) => entry.projectId === other.projectId);
+          const saved = other.worktreePath ?? project?.workspaceRoot;
+          if (!saved) continue;
+          const target = yield* fs
+            .realPath(saved)
+            .pipe(Effect.orElseSucceed(() => path.resolve(saved)));
+          if (pathKey(target) === pathKey(root) || inside(root, target) || inside(target, root))
+            return "Another thread references this workspace. Its files and branches were kept.";
+          if (
+            thread.branch !== null &&
+            other.branch === thread.branch &&
+            other.deletedAt === null &&
+            other.handoff?.state !== "departed"
+          )
+            return "Another resumable thread references this branch.";
+        }
+        const pending = yield* sql<{
+          status: string;
+        }>`SELECT status FROM orchestration_v2_effect_outbox
+          WHERE thread_id = ${thread.id} AND status NOT IN ('succeeded', 'cancelled')`.pipe(
+          NodeSqliteClient.readOnly,
+        );
+        if (pending.length > 0)
+          return "Pending or failed background effects protect this workspace.";
+        const tasks = yield* sql<{
+          task_id: string;
+        }>`SELECT task_id FROM scheduled_tasks WHERE enabled = 1 AND thread_id = ${thread.id}`.pipe(
+          NodeSqliteClient.readOnly,
+        );
+        if (tasks.length > 0) return "An enabled scheduled task protects this workspace.";
+        const sessionRows = yield* sql<{
+          payload_json: string;
+        }>`SELECT payload_json FROM orchestration_v2_projection_provider_sessions WHERE status != 'stopped'`.pipe(
+          NodeSqliteClient.readOnly,
+        );
+        for (const sessionRow of sessionRows) {
+          const session = yield* decodeCleanupSession(sessionRow.payload_json);
+          const cwd = yield* fs
+            .realPath(session.cwd)
+            .pipe(Effect.orElseSucceed(() => path.resolve(session.cwd)));
+          if (
+            (pathKey(cwd) === pathKey(root) || inside(root, cwd)) &&
+            (yield* providerSessions.isLive(session.id))
+          )
+            return "A live provider session protects this workspace.";
+        }
+        return null;
+      });
+      const retirement = yield* retireMoveWorkspace(thread, guard);
+      if (retirement === null) continue;
+      entries.push({
+        kind: "worktree",
+        outcome: retirement.status === "removed" ? "removed" : "kept",
+        reason: retirement.reason,
+        path: root,
+        projectPath: null,
+        threadId: thread.id,
+        threadTitle: thread.title,
+        bytes: null,
+        files: null,
+      });
+      if (!Equal.equals(retirement, handoff.retirement))
+        yield* engine.dispatch({
+          type: "thread.handoff.update",
+          commandId: CommandId.make(
+            `move:${handoff.handoffId}:cleanup:${retirement.status}:${retirement.reason}`,
+          ),
+          threadId: thread.id,
+          expected: "departed",
+          handoff: { ...handoff, retirement },
+        });
+    }
+  });
+
   const cleanWorktrees = Effect.fn("StorageCleanup.cleanWorktrees")(function* (
     serverSettings: ServerSettings,
     now: number,
@@ -890,6 +1000,7 @@ const make = Effect.gen(function* () {
       ...deletedThreads.filter((thread) => !groups.has(path.resolve(thread.worktreePath!))),
     ];
     for (const thread of candidates) {
+      if (thread.handoff?.state === "departed") continue;
       const settings = resolveWorktreeCleanup(serverSettings, thread.projectId);
       if (!worktreeCleanupEnabled(settings)) continue;
       const worktreePath = path.resolve(thread.worktreePath!);
@@ -1308,6 +1419,7 @@ const make = Effect.gen(function* () {
     const serverSettings = yield* settingsService.getSettings;
     const settings = serverSettings.storageCleanup;
     const entries: StorageCleanupReportEntry[] = [];
+    yield* cleanMovedWorktrees(entries).pipe(Effect.ignoreCause({ log: true }));
     const deletedWorktrees = yield* cleanWorktrees(serverSettings, now, entries).pipe(
       Effect.catch((error) =>
         Effect.gen(function* () {
@@ -1471,6 +1583,12 @@ const make = Effect.gen(function* () {
     );
     yield* forkParked(
       Stream.runForEach(events, (event) => {
+        if (
+          event.type === "thread.metadata-updated" &&
+          event.payload.handoff?.state === "departed" &&
+          event.payload.handoff.retirement?.status === "pending"
+        )
+          return requestSweep;
         if (event.type === "thread.deleted") deletions++;
         else if (
           event.type !== "provider-session.updated" ||

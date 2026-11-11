@@ -74,7 +74,6 @@ import {
   RuntimeMode,
   ThreadLinkedPullRequest,
   ThreadId,
-  type ProjectId,
   TurnItemId,
   TrimmedNonEmptyString,
   managedRuntimeModeCeilingMessage,
@@ -101,6 +100,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ProjectStore from "./ProjectStore.ts";
+import { workspaceAdmissionPath } from "../workspace/workspaceAdmissionPath.ts";
 import {
   isCheckpointRestoreIsolated,
   SHARED_WORKSPACE_RESTORE_MESSAGE,
@@ -1252,23 +1252,32 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
   };
   const workspacePath = Effect.fn("Orchestrator.workspacePath")(
-    function* (thread: Pick<OrchestrationV2AppThread, "id" | "projectId" | "worktreePath">) {
+    function* (
+      thread: Pick<OrchestrationV2AppThread, "id" | "projectId" | "worktreePath">,
+      allowMissing = false,
+    ) {
       const project = yield* projects.get(thread.projectId);
       if (Option.isNone(project))
         return yield* new OrchestratorProjectionError({
           threadId: thread.id,
           cause: "The workspace project no longer exists.",
         });
-      return yield* fileSystem.realPath(thread.worktreePath ?? project.value.workspaceRoot);
+      const cwd = thread.worktreePath ?? project.value.workspaceRoot;
+      return yield* allowMissing
+        ? workspaceAdmissionPath(cwd).pipe(
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          )
+        : fileSystem.realPath(cwd);
     },
-    (effect, thread) =>
+    (effect, thread, _allowMissing?: boolean) =>
       effect.pipe(
         Effect.mapError((cause) => new OrchestratorProjectionError({ threadId: thread.id, cause })),
       ),
   );
 
   const threadDispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
-  const workspaceAdmission = yield* KeyedLock.make<ProjectId>();
+  const workspaceAdmission = yield* KeyedLock.make<string>();
   // Read once: the policy is fixed for the server's life, and dispatch takes it as an input.
   const { managedPolicy } = serverSettings;
   const runtimeModeCeiling: RuntimeModeCeiling | undefined =
@@ -8916,9 +8925,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           command.handoff?.state === "departing" && command.handoff.workspaceRoot
             ? command.handoff.workspaceRoot
             : yield* workspacePath(thread);
-        for (const other of snapshot.threads.filter(
-          (candidate) => candidate.projectId === thread.projectId,
-        )) {
+        for (const other of [...snapshot.threads, ...snapshot.archivedThreads]) {
           const active = ["running", "starting", "preparing", "waiting", "queued"].includes(
             other.status ?? "",
           );
@@ -13856,11 +13863,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
     }
 
-    if (workspaceWriteCommands.has(command.type)) {
+    if (
+      workspaceWriteCommands.has(command.type) ||
+      command.type === "thread.create" ||
+      (command.type === "thread.metadata.update" && command.worktreePath !== undefined)
+    ) {
       const threadId = commandThreadId(command);
-      const thread = yield* projectionStore
-        .getThread(threadId)
-        .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })));
+      const thread =
+        command.type === "thread.create"
+          ? { ...command, id: command.threadId, handoff: undefined }
+          : yield* projectionStore
+              .getThread(threadId)
+              .pipe(
+                Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })),
+              );
       let owner =
         thread.handoff?.state === "departing" || thread.handoff?.state === "departed"
           ? thread
@@ -13870,13 +13886,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           .getDepartingWorkspaces(thread)
           .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })));
         if (moving.length > 0) {
-          const cwd = yield* workspacePath(thread);
+          const target =
+            command.type === "thread.metadata.update" && command.worktreePath !== undefined
+              ? { ...thread, worktreePath: command.worktreePath }
+              : thread;
+          const cwd = yield* workspacePath(target, true);
           for (const candidate of moving)
             if (
               isWithinWorkspace(
-                candidate.handoff?.state === "departing" && candidate.handoff.workspaceRoot
-                  ? candidate.handoff.workspaceRoot
-                  : yield* workspacePath(candidate),
+                candidate.handoff?.state === "departed" && candidate.handoff.retirement
+                  ? candidate.handoff.retirement.root
+                  : candidate.handoff?.state === "departing" && candidate.handoff.workspaceRoot
+                    ? candidate.handoff.workspaceRoot
+                    : yield* workspacePath(candidate),
                 cwd,
               )
             ) {
@@ -14735,23 +14757,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       : threadDispatch.withLock(parentThreadId, dispatch);
   });
 
-  // Admission and a move's fence commit under the same project lock; provider work runs outside it.
+  // Workspace aliases can belong to different projects; admission and move fences share one lock.
   const dispatchWithReceipt = Effect.fnUntraced(function* (command: OrchestrationV2ServerCommand) {
     if (
       !workspaceWriteCommands.has(command.type) &&
+      command.type !== "thread.create" &&
+      !(command.type === "thread.metadata.update" && command.worktreePath !== undefined) &&
       command.type !== "thread.fork" &&
       command.type !== "thread.merge_back" &&
       !(command.type === "thread.handoff.update" && command.handoff?.state === "departing")
     )
       return yield* dispatchWithThreadLocks(command);
-    const threadId =
-      command.type === "thread.fork" || command.type === "thread.merge_back"
-        ? command.sourceThreadId
-        : commandThreadId(command);
-    const thread = yield* findThread(threadId);
-    return yield* thread === null
-      ? dispatchWithThreadLocks(command)
-      : workspaceAdmission.withLock(thread.projectId, dispatchWithThreadLocks(command));
+    return yield* workspaceAdmission.withLock(
+      "workspace-admission",
+      dispatchWithThreadLocks(command),
+    );
   });
 
   const handleRunUpdate = Effect.fn("Orchestrator.handleRunUpdate")(

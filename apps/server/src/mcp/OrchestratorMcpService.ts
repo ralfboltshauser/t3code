@@ -862,6 +862,8 @@ function threadDetail(
           },
     branch: projection.thread.branch,
     worktreePath: projection.thread.worktreePath,
+    ...(projection.thread.handoff ? { handoff: projection.thread.handoff } : {}),
+    ...(projection.thread.importOrigin ? { importOrigin: projection.thread.importOrigin } : {}),
     parentThreadId: projection.thread.lineage.parentThreadId,
     relationshipToParent: projection.thread.lineage.relationshipToParent,
     runCount: projection.runs.length,

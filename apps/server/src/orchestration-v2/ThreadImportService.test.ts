@@ -174,7 +174,7 @@ const makeRuntime = Effect.fnUntraced(function* () {
     { databaseLayer: database, runEffectWorker: false },
   );
   const layer = ThreadManagement.layer.pipe(
-    Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(database))),
+    Layer.provideMerge(CommandReceiptStore.layer.pipe(Layer.provide(database))),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provideMerge(replay),
   );
@@ -213,11 +213,11 @@ const makeRuntime = Effect.fnUntraced(function* () {
         layer,
         ProjectStore.layer.pipe(Layer.provide(database)),
         ProjectionStore.layer.pipe(Layer.provide(database)),
-        Layer.mock(GitVcsDriver.GitVcsDriver)({}),
+        Layer.mock(GitVcsDriver.GitVcsDriver)({ listWorktreePaths: () => Effect.succeed([cwd]) }),
       ),
     ),
   );
-  return { layer: seeded, turns };
+  return { layer: seeded, turns, cwd };
 });
 
 const finishRun = Effect.fnUntraced(function* (threadId: ThreadId, runId: RunId) {
@@ -244,7 +244,17 @@ it.effect("seeds the first continuation and replays its original run after later
     yield* Effect.gen(function* () {
       const imports = yield* ThreadImportService.ThreadImportService;
       const threads = yield* ThreadManagement.ThreadManagementService;
-      const first = yield* imports.importThread(request);
+      const bundled = {
+        ...request,
+        worktreePath: runtime.cwd,
+        bundle: {
+          attachmentId: "pending:bundle",
+          tip: "a".repeat(40),
+          snapshot: "b".repeat(40),
+          relativeCwd: "",
+        },
+      };
+      const first = yield* imports.importThread(bundled);
       assert.isTrue(first.created);
       assert.equal(first.projectId, projectId);
       assert.isNotNull(first.runId);
@@ -299,10 +309,13 @@ it.effect("seeds the first continuation and replays its original run after later
         { continuationPrompt: "A different task" },
         { messages: [] },
       ]) {
-        const rejected = yield* imports.importThread({ ...request, ...change }).pipe(Effect.result);
+        const rejected = yield* imports.importThread({ ...bundled, ...change }).pipe(Effect.result);
         assert.equal(rejected._tag, "Failure");
       }
-      const retried = yield* imports.importThread(request);
+      const retried = yield* imports.importThread({
+        ...bundled,
+        workspace: Effect.die("An accepted retry must not prepare a workspace"),
+      });
       assert.deepEqual(retried, { ...first, created: false });
       yield* (yield* EffectWorker.OrchestrationEffectWorkerV2).drain();
       assert.deepEqual(yield* threads.getThreadProjection(first.threadId), beforeRetry);
@@ -331,7 +344,7 @@ it.effect("seeds the first continuation and replays its original run after later
         type: "thread.create",
         commandId: CommandId.make("command:shared-root"),
         threadId: siblingId,
-        projectId,
+        projectId: otherProjectId,
         title: "Shared workspace",
         modelSelection,
         runtimeMode: "full-access",
@@ -384,9 +397,53 @@ it.effect("seeds the first continuation and replays its original run after later
       assert.equal(refusedSibling._tag, "OrchestratorThreadMovedError");
       yield* threads.dispatch({
         type: "thread.handoff.update",
-        commandId: CommandId.make("command:move:failed"),
+        commandId: CommandId.make("command:move:accepted"),
         threadId: distinct.threadId,
         expected: "departing",
+        handoff: {
+          ...moving,
+          state: "departed",
+          threadId: ThreadId.make("remote-thread"),
+          retirement: {
+            root: realRoot,
+            tip: "a".repeat(40),
+            snapshot: "b".repeat(40),
+            status: "pending",
+            reason: "Checking",
+          },
+        },
+      });
+      const refusedCreate = yield* threads
+        .dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("command:move:new-owner"),
+          threadId: ThreadId.make("new-owner"),
+          projectId: otherProjectId,
+          title: "Do not recreate a retired source",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: realRoot,
+          createdBy: "user",
+          creationSource: "web",
+        })
+        .pipe(Effect.flip);
+      assert.equal(refusedCreate._tag, "OrchestratorThreadMovedError");
+      const unrelated = yield* (yield* ProjectStore.ProjectStoreV2).get(otherProjectId);
+      assert.isTrue(Option.isSome(unrelated));
+      if (Option.isSome(unrelated))
+        yield* threads.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("command:unrelated:missing-worktree"),
+          threadId: siblingId,
+          worktreePath: `${unrelated.value.workspaceRoot}/removed-worktree`,
+        });
+      yield* threads.dispatch({
+        type: "thread.handoff.update",
+        commandId: CommandId.make("command:move:failed"),
+        threadId: distinct.threadId,
+        expected: "departed",
         handoff: { ...moving, state: "failed", lastError: "Destination refused before accepting" },
       });
       assert.deepEqual(

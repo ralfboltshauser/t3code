@@ -250,7 +250,9 @@ function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
               <p className="text-sm text-muted-foreground">
                 Moves recent conversation text and captured Git working files. Earlier history stays
                 here. Ignored untracked files, attachments, staging and running processes stay here.
-                Uses the destination’s worktree setup.
+                Uses the destination’s worktree setup. New move worktrees are disposable: after a
+                later move, safely captured checkouts are removed immediately. Stop external
+                writers; sources with local-only work are kept with a reason.
               </p>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`${labelId}-instruction`}>

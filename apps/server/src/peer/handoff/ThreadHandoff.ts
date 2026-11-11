@@ -12,11 +12,14 @@ import {
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Digest from "effect/crypto/Digest";
+import * as Hex from "effect/encoding/Hex";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -100,6 +103,14 @@ const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const config = yield* ServerConfig.ServerConfig;
   const random = yield* SecureRandom.SecureRandom;
+  const crypto = yield* Digest.Digest;
+  const promptDigest = Effect.fn("ThreadHandoff.promptDigest")(function* (
+    prompt: string | undefined,
+  ) {
+    return Hex.encode(
+      yield* crypto.digest(Digest.sha256, new TextEncoder().encode(prompt?.trim() ?? "")),
+    );
+  });
   const http = yield* HttpClient.HttpClient;
   const scope = yield* Scope.Scope;
   const locks = yield* KeyedLock.make<ThreadId>();
@@ -124,6 +135,24 @@ const make = Effect.gen(function* () {
     issuedAt: 0,
   });
   const operationDir = (id: string) => path.join(config.stateDir, "thread-moves", id);
+  const pruneResolved = Effect.fn("ThreadHandoff.pruneResolved")(
+    function* (handoff: OrchestrationV2ThreadHandoff) {
+      if (!/^[a-zA-Z0-9-]{1,128}$/.test(handoff.handoffId)) return;
+      if (handoff.state !== "failed" && (handoff.state !== "departed" || !handoff.retirement))
+        return;
+      const dir = operationDir(handoff.handoffId);
+      if (!(yield* fs.exists(dir))) return;
+      for (const name of [
+        "request.json",
+        "request.tmp",
+        "preparing",
+        `${handoff.handoffId}.bundle`,
+      ])
+        yield* fs.remove(path.join(dir, name), { force: true });
+      if ((yield* fs.readDirectory(dir)).length === 0) yield* fs.remove(dir);
+    },
+    Effect.ignoreCause({ log: true }),
+  );
   const read = Effect.fn("ThreadHandoff.read")(function* (threadId: ThreadId) {
     return yield* threads
       .getThreadRecords(threadId, [
@@ -293,10 +322,14 @@ const make = Effect.gen(function* () {
     return yield* locks.withLock(
       threadId,
       Effect.gen(function* () {
-        const { thread } = yield* read(threadId);
+        const records = yield* read(threadId);
+        const { thread } = records;
         const handoff = thread.handoff;
         if (!handoff) return yield* failure("This chat has no move to check.");
-        if (handoff.state !== "departing") return handoff;
+        if (handoff.state !== "departing") {
+          yield* pruneResolved(handoff);
+          return handoff;
+        }
         const filename = path.join(operationDir(handoff.handoffId), "request.json");
         if (
           !(yield* fs
@@ -316,6 +349,7 @@ const make = Effect.gen(function* () {
                 "Workspace capture was interrupted before anything was sent. Try moving again.",
             };
             yield* set(threadId, "departing", failed, "preparation-interrupted");
+            yield* pruneResolved(failed);
             return failed;
           }
           return yield* failure(
@@ -343,7 +377,19 @@ const make = Effect.gen(function* () {
           return yield* failure(
             "The original link changed. Confirm the destination move before working here again.",
           );
-        const uploaded = yield* upload(thread, record).pipe(Effect.result);
+        const accepted = triedBefore
+          ? yield* forwarding
+              .call(
+                scopeFor(thread),
+                ProjectToolkit.tools.t3_thread_import,
+                handoff.environmentId,
+                record.input,
+              )
+              .pipe(Effect.option)
+          : Option.none();
+        const uploaded = Option.isSome(accepted)
+          ? Result.succeed("")
+          : yield* upload(thread, record).pipe(Effect.result);
         if (uploaded._tag === "Failure") {
           const stopped = triedBefore
             ? { ...handoff, lastError: uploaded.failure.message }
@@ -354,22 +400,31 @@ const make = Effect.gen(function* () {
             stopped,
             triedBefore ? "upload-uncertain" : "upload-failed",
           );
+          yield* pruneResolved(stopped);
           return stopped;
         }
         const attachmentId = uploaded.success;
-        yield* set(
-          threadId,
-          "departing",
-          { ...handoff, captureReady: true, sent: true },
-          "sending",
-        );
-        yield* save(handoff.handoffId, { ...record, sent: true });
-        const result = yield* forwarding
-          .call(scopeFor(thread), ProjectToolkit.tools.t3_thread_import, handoff.environmentId, {
-            ...record.input,
-            bundle: { ...record.input.bundle!, attachmentId },
-          })
-          .pipe(Effect.result);
+        if (Option.isNone(accepted))
+          yield* set(
+            threadId,
+            "departing",
+            { ...handoff, captureReady: true, sent: true },
+            "sending",
+          );
+        if (Option.isNone(accepted)) yield* save(handoff.handoffId, { ...record, sent: true });
+        const result = Option.isSome(accepted)
+          ? Result.succeed(accepted.value)
+          : yield* forwarding
+              .call(
+                scopeFor(thread),
+                ProjectToolkit.tools.t3_thread_import,
+                handoff.environmentId,
+                {
+                  ...record.input,
+                  bundle: { ...record.input.bundle!, attachmentId },
+                },
+              )
+              .pipe(Effect.result);
         if (result._tag === "Failure") {
           if (
             !triedBefore &&
@@ -389,6 +444,7 @@ const make = Effect.gen(function* () {
               lastError: result.failure.message,
             };
             yield* set(threadId, "departing", failed, "refused");
+            yield* pruneResolved(failed);
             return failed;
           }
           // An uncertain send can already own a destination; later errors cannot release the source.
@@ -412,12 +468,40 @@ const make = Effect.gen(function* () {
           environmentId: handoff.environmentId,
           label: handoff.label,
           threadId: result.success.threadId,
+          request: {
+            projectId: record.input.projectId,
+            continuationDigest: yield* promptDigest(record.input.continuationPrompt),
+          },
           link: formatThreadLink(
             { environmentId: handoff.environmentId, threadId: result.success.threadId },
             thread.title,
           ),
+          ...(handoff.workspaceRoot &&
+          result.success.incomingSnapshot?.version === 1 &&
+          result.success.incomingSnapshot.snapshot === record.input.bundle?.snapshot &&
+          result.success.incomingSnapshot?.ref === `refs/t3code/moves/${handoff.handoffId}/incoming`
+            ? {
+                retirement: {
+                  root: handoff.workspaceRoot,
+                  tip: record.input.bundle!.tip,
+                  snapshot: record.input.bundle!.snapshot,
+                  status: "pending" as const,
+                  reason: "Checking whether the disposable source can be removed safely.",
+                },
+              }
+            : {}),
         };
+        for (const session of records.providerSessions)
+          yield* sessions
+            .releaseUnlessBusy({
+              providerSessionId: session.id,
+              ownProviderThreadIds: records.providerThreads.map((entry) => entry.id),
+              reason: "manual_shutdown",
+              detail: "This chat moved to another machine.",
+            })
+            .pipe(Effect.ignore);
         yield* set(threadId, "departing", departed, "accepted");
+        yield* pruneResolved(departed);
         return departed;
       }),
     );
@@ -429,6 +513,7 @@ const make = Effect.gen(function* () {
       Effect.gen(function* () {
         const records = yield* read(input.threadId);
         const thread = records.thread;
+        if (thread.handoff?.state === "failed") yield* pruneResolved(thread.handoff);
         if (thread.handoff && thread.handoff.state !== "failed") return thread.handoff;
         if (
           thread.archivedAt ||
@@ -634,6 +719,7 @@ const make = Effect.gen(function* () {
               "Could not capture this workspace. No move was sent; resolve the Git or storage issue and try again.",
           };
           yield* set(thread.id, "departing", failed, "preparation-failed");
+          yield* pruneResolved(failed);
           return failed;
         }
         yield* depart(thread.id).pipe(Effect.ignoreCause({ log: true }), Effect.forkIn(scope));
@@ -648,6 +734,20 @@ const make = Effect.gen(function* () {
         return yield* failure(
           "This chat already has a move to another machine. Resolve that move first.",
         );
+      if (thread.handoff.state === "departed") {
+        if (
+          thread.handoff.request &&
+          ((input.projectId !== undefined &&
+            input.projectId !== thread.handoff.request.projectId) ||
+            (yield* promptDigest(input.continuationPrompt)) !==
+              thread.handoff.request.continuationDigest)
+        )
+          return yield* failure(
+            "This chat already moved with a different project or instruction. Open the destination or check the original move.",
+          );
+        yield* pruneResolved(thread.handoff);
+        return thread.handoff;
+      }
       const saved = yield* fs
         .readFileString(path.join(operationDir(thread.handoff.handoffId), "request.json"))
         .pipe(
@@ -672,7 +772,12 @@ const make = Effect.gen(function* () {
       Effect.gen(function* () {
         const snapshot = yield* projections.getShellSnapshot();
         yield* Effect.forEach(
-          snapshot.threads.filter((thread) => thread.handoff?.state === "departing"),
+          snapshot.threads.filter(
+            (thread) =>
+              thread.handoff?.state === "departing" ||
+              thread.handoff?.state === "failed" ||
+              (thread.handoff?.state === "departed" && thread.handoff.retirement),
+          ),
           (thread) => depart(thread.id).pipe(Effect.ignoreCause({ log: true })),
           { concurrency: 4, discard: true },
         );

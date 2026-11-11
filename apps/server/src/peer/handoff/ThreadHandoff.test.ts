@@ -41,7 +41,7 @@ const there = descriptorOf("destination", "Ubuntu", { threadHandoffProtocol: 1 }
 const here = descriptorOf("source", "Laptop", { threadHandoffProtocol: 1 });
 const acceptedId = ThreadId.make("destination-chat");
 
-it.effect.each(["lost-response", "refused", "interrupted-capture"] as const)(
+it.effect.each(["lost-response", "strong-receipt", "refused", "interrupted-capture"] as const)(
   "a %s preserves the original move identity and ownership",
   (outcome) =>
     Effect.gen(function* () {
@@ -57,6 +57,7 @@ it.effect.each(["lost-response", "refused", "interrupted-capture"] as const)(
       const capturing = yield* Deferred.make<void>();
       const requests: OrchestratorMcpThreadImportInput[] = [];
       let packs = 0;
+      let uploads = 0;
       let changedLink = false;
       const linkedAt = DateTime.makeUnsafe("2026-11-01T00:00:00Z");
       const link = {
@@ -109,6 +110,15 @@ it.effect.each(["lost-response", "refused", "interrupted-capture"] as const)(
             projectId: ProjectId.make("destination-project"),
             created: false,
             runId: null,
+            ...(outcome === "strong-receipt"
+              ? {
+                  incomingSnapshot: {
+                    version: 1,
+                    snapshot: "b".repeat(40),
+                    ref: `refs/t3code/moves/${(input as OrchestratorMcpThreadImportInput).source.handoffId}/incoming`,
+                  },
+                }
+              : {}),
           };
         })) as PeerForwarding.PeerForwarding["Service"]["call"];
       const dependencies = Layer.mergeAll(
@@ -185,12 +195,13 @@ it.effect.each(["lost-response", "refused", "interrupted-capture"] as const)(
         Layer.succeed(
           HttpClient.HttpClient,
           HttpClient.make(() =>
-            Effect.succeed(
-              HttpClientResponse.fromWeb(
+            Effect.sync(() => {
+              uploads++;
+              return HttpClientResponse.fromWeb(
                 HttpClientRequest.post("http://destination/upload"),
                 new Response(null, { status: 204 }),
-              ),
-            ),
+              );
+            }),
           ),
         ),
         ServerConfig.layerTest(root, path.join(root, "state")),
@@ -232,11 +243,24 @@ it.effect.each(["lost-response", "refused", "interrupted-capture"] as const)(
             { ...requests[1], bundle: { ...requests[1]!.bundle, attachmentId: "normalized" } },
           );
           assert.equal(packs, 1);
+          assert.equal(uploads, 1);
+          const config = yield* ServerConfig.ServerConfig;
+          const saved = path.join(
+            config.stateDir,
+            "thread-moves",
+            checked.handoffId,
+            "request.json",
+          );
+          assert.equal(yield* fs.exists(saved), outcome !== "strong-receipt");
+          assert.equal(
+            (yield* service.start({ threadId: id, environmentId: there.environmentId })).state,
+            "departed",
+          );
           assert.equal((yield* service.retry(id)).state, "departed");
           assert.equal(requests.length, 2);
         }
         assert.equal(handoff?.state, checked.state);
         assert.equal(requests[0]?.bundle?.relativeCwd, "");
-      }).pipe(Effect.provide(ThreadHandoff.layer.pipe(Layer.provide(dependencies))));
+      }).pipe(Effect.provide(ThreadHandoff.layer.pipe(Layer.provideMerge(dependencies))));
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeCrypto.layer, NodeServices.layer))),
 );

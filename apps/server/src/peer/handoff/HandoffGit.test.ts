@@ -15,9 +15,27 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
 import * as HandoffGit from "./HandoffGit.ts";
+import * as GitVcsDriver from "../../vcs/GitVcsDriver.ts";
+import { moveRetirementCaptureReason } from "./moveRetirementCapture.ts";
+import { moveWorkspaceProvenance } from "./moveWorkspaceMetadata.ts";
+import * as ServerConfig from "../../config.ts";
+import * as HandoffImport from "./HandoffImport.ts";
+import * as ThreadImportService from "../../orchestration-v2/ThreadImportService.ts";
+import * as ProjectService from "../../project/ProjectService.ts";
+import * as ProviderRegistryMock from "../../provider/testUtils/providerRegistryMock.ts";
+import {
+  EnvironmentId,
+  ProjectId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  RunId,
+  ThreadId,
+} from "@t3tools/contracts";
+import { createPendingAttachmentId } from "../../attachmentStore.ts";
 
-const layer = HandoffGit.layer.pipe(
+const layer = Layer.merge(HandoffGit.layer, GitVcsDriver.layer).pipe(
   Layer.provideMerge(VcsProcess.layer),
+  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "move-retirement-git-" })),
   Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 const branch = "fix/login";
@@ -135,6 +153,263 @@ const pauseGit = Effect.fnUntraced(function* (
 });
 
 it.layer(layer)("Git bundle pack/apply", (it) => {
+  it.effect("never borrows an existing same-tip branch as a disposable move branch", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const handoff = yield* HandoffGit.HandoffGit;
+      const packed = yield* handoff.pack({ cwd: repo.sender, handoffId, outDir: repo.outDir });
+      yield* git(repo.receiver, ["branch", "move/owned"]);
+      const before = yield* repositoryState(repo.receiver);
+      const error = yield* handoff
+        .apply({ ...applyInput(repo, packed), branch: "move/owned", ownWorkspace: true })
+        .pipe(Effect.flip);
+      assert.include(error.message, "already in use");
+      assert.deepEqual(yield* repositoryState(repo.receiver), before);
+      assert.isFalse(yield* repo.fs.exists(repo.worktree));
+    }).pipe(Effect.scoped),
+  );
+  it.effect.each(["blank", "continuation", "quota"])(
+    "replays an accepted %s import after workspace, provider and project disappear",
+    (mode) =>
+      Effect.gen(function* () {
+        const repo = yield* fixture;
+        const config = yield* ServerConfig.ServerConfig;
+        const handoff = yield* HandoffGit.HandoffGit;
+        const id = `receipt-${mode}`;
+        yield* repo.fs.writeFileString(
+          repo.path.join(repo.sender, "app.ts"),
+          "original incoming bytes\n",
+        );
+        const packed = yield* handoff.pack({
+          cwd: repo.sender,
+          handoffId: id,
+          outDir: repo.outDir,
+        });
+        const attachmentId = createPendingAttachmentId("bundle");
+        const upload = repo.path.join(config.attachmentsDir, `${attachmentId}.bundle`);
+        assert.isNotNull(upload);
+        yield* repo.fs.makeDirectory(repo.path.dirname(upload!), { recursive: true });
+        yield* repo.fs.copyFile(packed.bundlePath, upload!);
+        const projectId = ProjectId.make(`receipt-project-${mode}`);
+        const input = {
+          source: {
+            environmentId: EnvironmentId.make("source"),
+            threadId: ThreadId.make("source"),
+            handoffId: id,
+          },
+          projectId,
+          title: "Moved",
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "test" },
+          runtimeMode: "full-access" as const,
+          interactionMode: "default" as const,
+          linkOrigin: { sessionId: "original-session", label: "Source" },
+          messages: [],
+          bundle: { attachmentId, tip: packed.tip, snapshot: packed.snapshot, relativeCwd: "" },
+          ...(mode === "continuation" ? { continuationPrompt: "Continue" } : {}),
+        };
+        let calls = 0;
+        let available = true;
+        const processes = yield* VcsProcess.VcsProcess;
+        if (mode === "quota")
+          yield* processes.run({
+            operation: "HandoffGit.testQuota",
+            command: "git",
+            cwd: repo.receiver,
+            args: ["update-ref", "--stdin"],
+            stdin: Array.from(
+              { length: 256 },
+              (_, index) => `create refs/t3code/moves/saved-${index}/incoming ${packed.tip}\n`,
+            ).join(""),
+          });
+        const native = Layer.mock(ThreadImportService.ThreadImportService)({
+          importThread: (request) =>
+            Effect.gen(function* () {
+              assert.isTrue(available);
+              const workspace = yield* request.workspace!;
+              calls++;
+              assert.equal(
+                yield* git(repo.receiver, ["show", `refs/t3code/moves/${id}/incoming:app.ts`]).pipe(
+                  Effect.provideService(VcsProcess.VcsProcess, processes),
+                  Effect.orDie,
+                ),
+                "original incoming bytes",
+              );
+              yield* repo.fs
+                .writeFileString(
+                  repo.path.join(workspace.worktreePath, "app.ts"),
+                  "setup replaced incoming bytes\n",
+                )
+                .pipe(Effect.orDie);
+              return {
+                threadId: ThreadId.make(`accepted-${mode}`),
+                projectId,
+                created: true,
+                runId: mode === "continuation" ? RunId.make("original-run") : null,
+              };
+            }),
+        });
+        const dependencies = Layer.mergeAll(
+          native,
+          Layer.mock(ProjectService.ProjectService)({
+            getById: () =>
+              available
+                ? Effect.succeedSome({ id: projectId, workspaceRoot: repo.receiver } as never)
+                : Effect.die("A replay must not look up a project"),
+          }),
+          ProviderRegistryMock.layer([
+            {
+              instanceId: input.modelSelection.instanceId,
+              driver: ProviderDriverKind.make("codex"),
+              enabled: true,
+              installed: true,
+              version: null,
+              status: "ready",
+              auth: { status: "authenticated" },
+              checkedAt: "2026-11-11T00:00:00Z",
+              models: [],
+              slashCommands: [],
+              skills: [],
+            },
+          ]),
+        );
+        const imports = yield* HandoffImport.HandoffImport.pipe(
+          Effect.provide(HandoffImport.layer.pipe(Layer.provide(dependencies))),
+        );
+        if (mode === "quota") {
+          const refused = yield* imports.importThread(input).pipe(Effect.flip);
+          assert.include(refused.message, "256 incoming recovery versions");
+          assert.equal(calls, 0);
+          assert.isFalse(yield* repo.fs.exists(repo.path.join(config.worktreesDir, "moves", id)));
+          assert.equal(
+            (yield* git(repo.receiver, [
+              "for-each-ref",
+              "--format=%(refname)",
+              "refs/t3code/moves/",
+            ])).split("\n").length,
+            256,
+          );
+          return;
+        }
+        const first = yield* imports.importThread(input);
+        assert.equal(first.incomingSnapshot?.snapshot, packed.snapshot);
+        assert.isFalse(yield* repo.fs.exists(upload!));
+        available = false;
+        yield* git(repo.receiver, [
+          "worktree",
+          "remove",
+          "--force",
+          repo.path.join(config.worktreesDir, "moves", id),
+        ]);
+        const replay = yield* imports.importThread({
+          ...input,
+          bundle: { ...input.bundle, attachmentId: "pending" },
+        });
+        assert.deepEqual(replay, { ...first, created: false });
+        assert.equal(calls, 1);
+        const mismatch = yield* imports
+          .importThread({
+            ...input,
+            linkOrigin: { sessionId: "different-session", label: "Source" },
+          })
+          .pipe(Effect.result);
+        assert.equal(mismatch._tag, "Failure");
+        assert.equal(calls, 1);
+        yield* git(repo.receiver, ["gc", "--prune=now"]);
+        assert.equal(
+          yield* git(repo.receiver, ["show", `${first.incomingSnapshot!.ref}:app.ts`]),
+          "original incoming bytes",
+        );
+      }).pipe(Effect.scoped),
+  );
+  it.effect(
+    "retains the exact incoming version through setup overwrites and garbage collection",
+    () =>
+      Effect.gen(function* () {
+        const repo = yield* fixture;
+        const handoff = yield* HandoffGit.HandoffGit;
+        yield* repo.fs.writeFileString(
+          repo.path.join(repo.sender, "app.ts"),
+          "incoming unique work\n",
+        );
+        const packed = yield* handoff.pack({ cwd: repo.sender, handoffId, outDir: repo.outDir });
+        yield* handoff.apply({
+          ...applyInput(repo, packed),
+          branch: "move/transfer",
+          ownWorkspace: true,
+        });
+        yield* repo.fs.writeFileString(
+          repo.path.join(repo.worktree, "app.ts"),
+          "setup overwrote this\n",
+        );
+        yield* git(repo.receiver, ["gc", "--prune=now"]);
+        assert.equal(
+          yield* git(repo.receiver, ["show", "refs/t3code/moves/transfer/incoming:app.ts"]),
+          "incoming unique work",
+        );
+        yield* repo.fs.remove(packed.bundlePath);
+        assert.equal(
+          yield* git(repo.receiver, ["rev-parse", "refs/t3code/moves/transfer/incoming"]),
+          packed.snapshot,
+        );
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect.each([
+    "portable",
+    "staged-only",
+    "ignored",
+    "changed after capture",
+    "assume unchanged",
+    "intent to add",
+    "filter",
+  ])("only certifies lossless source retirement: %s", (mode) =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const handoff = yield* HandoffGit.HandoffGit;
+      yield* repo.fs.writeFileString(
+        repo.path.join(repo.sender, "app.ts"),
+        "ordinary working edit\n",
+      );
+      yield* repo.fs.writeFileString(repo.path.join(repo.sender, "new.txt"), "new portable file\n");
+      if (mode === "staged-only") {
+        yield* git(repo.sender, ["add", "app.ts"]);
+        yield* repo.fs.writeFileString(
+          repo.path.join(repo.sender, "app.ts"),
+          "another working version\n",
+        );
+      }
+      if (mode === "ignored")
+        yield* repo.fs.writeFileString(repo.path.join(repo.sender, ".env"), "PRIVATE=local\n");
+      if (mode === "assume unchanged")
+        yield* git(repo.sender, ["update-index", "--assume-unchanged", "local.cfg"]);
+      if (mode === "intent to add") yield* git(repo.sender, ["add", "--intent-to-add", "new.txt"]);
+      if (mode === "filter") {
+        yield* repo.fs.writeFileString(
+          repo.path.join(repo.sender, ".gitattributes"),
+          "app.ts text eol=crlf\n",
+        );
+        yield* repo.fs.writeFileString(repo.path.join(repo.sender, "app.ts"), "raw CRLF\r\n");
+      }
+      const packed = yield* handoff.pack({ cwd: repo.sender, handoffId, outDir: repo.outDir });
+      if (mode === "changed after capture")
+        yield* repo.fs.writeFileString(repo.path.join(repo.sender, "app.ts"), "late work\n");
+      const before = yield* repositoryState(repo.sender);
+      const reason = yield* moveRetirementCaptureReason(
+        repo.sender,
+        packed.tip,
+        packed.snapshot,
+        yield* moveWorkspaceProvenance(repo.sender),
+      );
+      if (mode === "portable") assert.isNull(reason);
+      else assert.isNotNull(reason);
+      assert.deepEqual(yield* repositoryState(repo.sender), before);
+      if (mode === "ignored")
+        assert.equal(
+          yield* repo.fs.readFileString(repo.path.join(repo.sender, ".env")),
+          "PRIVATE=local\n",
+        );
+    }).pipe(Effect.scoped),
+  );
   it.effect.each(["branch", "detached subdirectory", "sparse checkout", "sparse receiver"])(
     "round-trips %s without changing either existing checkout",
     (mode) =>

@@ -24,7 +24,7 @@ Idle independent chats can move to a linked machine through `/move`, the web cha
 menu or palette, and the native move screen. Move recent portable text and captured
 Git work into an operation-owned destination worktree, with optional continuation;
 blank moves never start a provider turn. Keep the source fenced during uncertainty,
-replay the original import/continuation receipt, retain source files, and use a fresh
+replay the original import/continuation receipt, retain exceptional source files, and use a fresh
 operation for return moves. No active/deferred self-handoff or implicit process,
 attachment, credential, goal, schedule or watch migration. Both servers advertise
 `threadHandoffProtocol: 1`; old clients remain subject to server fencing. Do not run
@@ -45,6 +45,50 @@ These checks cover source staging preservation, Git failure cleanup, immutable
 retry identity, lost replies and changed link grants, original continuation receipts,
 blank imports, and the server’s move fence. Real peer verification uses isolated
 databases/clones; never experiment with a live chat’s ownership.
+
+New moves pin the exact incoming Git snapshot before setup/continuation and retain
+it as visible recovery history until explicitly discarded. Compact authenticated
+receipts replay the original run independently of workspace, upload, project and
+provider availability; accepted source requests/bundles and received uploads are
+reclaimed after durable acknowledgement. Protocol 1 transfer remains compatible;
+only a versioned incoming-snapshot receipt permits retirement.
+
+Accepted moves immediately wake StorageCleanup even with age policies disabled.
+Only newly allocated operation-owned move worktrees qualify, under exclusive T3
+use with external writers stopped. Root/admin inode provenance, all-project owner
+and writer/effect checks, unchanged H/index and exact raw snapshot bytes gate
+force removal. Compare-delete only a proven owned unused branch at captured H.
+Keep legacy/project/shared/subdirectory sources and staged, ignored, filtered,
+sparse or unsupported local state; never replace these protections with age rules
+or blanket dependency-directory deletion. Incoming snapshots are distinct from
+post-setup checkpoints, retained through onward moves/deletion, and capped at 256
+per repository without TTL eviction. Tiny receipts and unique history can grow;
+automatic cleanup does not promise backups or safety against external writers.
+
+Preserve the narrow ownership/capture helpers in `peer/handoff/MoveWorkspace.ts`,
+`moveRetirementCapture.ts` and `retireMoveWorkspace.ts`, the existing cleanup worker
+wake, global workspace admission fencing across project aliases, indexed fence
+lookup (migration 82), imported setup completion observation in ThreadLaunchService,
+and web/mobile kept/removed status plus incoming recovery command. Do not resurrect
+retired paths on import replay or destructively adopt legacy moves by name.
+`moveWorkspaceMetadata.ts` preserves the shared macOS creation-provenance bytes in
+the local ownership record and rejects changed/custom attributes, ACLs, ownership,
+flags or permissions. Attribute inspection requires Python 3; unavailable inspection
+keeps the source. `workspace/workspaceAdmissionPath.ts` resolves missing paths through
+existing ancestors, preserving ordinary checkout recreation while rejecting dangling
+aliases. MCP thread reads expose the same move status and incoming recovery identity.
+
+```sh
+vp test run apps/server/src/peer/handoff apps/server/src/orchestration-v2/ThreadImportService.test.ts apps/server/src/orchestration-v2/ThreadLaunchService.test.ts apps/server/src/storageCleanup.test.ts apps/server/src/workspace/workspaceAdmissionPath.test.ts apps/server/src/mcp/OrchestratorMcpService.activity.test.ts packages/client-runtime/src/state/threadHandoff.test.ts packages/client-runtime/src/state/commandPermissions.test.ts
+```
+
+These cover pre-setup snapshot recovery/GC, quota refusal without eviction,
+receipt-first blank/continuation replay, cross-project admission, supported raw
+capture versus staging/ignored/filter/index exceptions, replacement/late-edit
+safety, owned branch removal, restart reconciliation and immediate cleanup with
+age rules off. A primary real-client pass must also prove repeated back-and-forth
+isolated moves with Replay, cleanup status/recovery controls and bounded disposable
+checkouts/branches/transport payloads, counting retained history separately.
 
 New independent threads default to worktrees based on fetched `personal` through
 `t3.json`'s `defaultThreadEnvMode` and `defaultWorktreeBaseRef`. Explicit dependency

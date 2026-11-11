@@ -548,7 +548,7 @@ export interface ProjectionStoreV2Shape {
     shareId: GuestShareId,
   ) => Effect.Effect<ThreadId | null, ProjectionStoreV2Error>;
   readonly getDepartingWorkspaces: (
-    thread: OrchestrationV2AppThread,
+    thread: Pick<OrchestrationV2AppThread, "id">,
   ) => Effect.Effect<ReadonlyArray<OrchestrationV2AppThread>, ProjectionStoreV2Error>;
   readonly getThread: (
     threadId: ThreadId,
@@ -5081,9 +5081,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
     const getDepartingWorkspaces: ProjectionStoreV2Shape["getDepartingWorkspaces"] = Effect.fn(
       "ProjectionStore.getDepartingWorkspaces",
     )(
-      function* (thread) {
+      function* (_thread) {
         const rows =
-          yield* sql<PayloadRow>`SELECT payload_json FROM orchestration_v2_projection_threads WHERE project_id = ${thread.projectId} AND json_extract(payload_json, '$.handoff.state') = 'departing'`;
+          yield* sql<PayloadRow>`SELECT payload_json FROM orchestration_v2_projection_threads
+            WHERE json_extract(payload_json, '$.handoff.state') = 'departing'
+            OR (json_extract(payload_json, '$.handoff.state') = 'departed'
+              AND json_extract(payload_json, '$.handoff.retirement.root') IS NOT NULL)`;
         return yield* Effect.forEach(rows, (row) => decodeThreadPayload(row.payload_json));
       },
       (effect, thread) =>

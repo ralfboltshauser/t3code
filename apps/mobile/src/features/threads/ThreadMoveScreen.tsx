@@ -1,5 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { incomingMoveRecoveryCommand } from "@t3tools/client-runtime/state/threadHandoff";
+import * as Clipboard from "expo-clipboard";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
@@ -185,7 +187,9 @@ export function ThreadMoveScreen({
           <Text textRole="footnote" className="text-foreground-muted">
             Moves recent conversation text and captured Git working files. Earlier history stays
             here. Ignored untracked files, attachments, staging and running processes stay here.
-            Uses the destination’s worktree setup.
+            Uses the destination’s worktree setup. New move worktrees are disposable: safely
+            captured checkouts are removed after a later move. Stop external writers; local-only
+            work keeps its source.
           </Text>
           <ListSection title="Next instruction (optional)">
             <View className="p-4">
@@ -219,12 +223,25 @@ export function ThreadMoveNotice({
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
   const retry = useAtomCommand(threadHandoffEnvironment.retry);
   const move = thread?.handoff;
+  const recovery = incomingMoveRecoveryCommand(thread?.importOrigin);
   if (!move && thread?.importOrigin)
     return (
       <View className="px-4 pb-3">
         <Notice
-          message={`Moved from ${thread.linkOrigin?.label ?? "another machine"}. Recent conversation text and Git files arrived in a new worktree. Earlier history and local-only resources remain on the source.`}
+          message={
+            recovery
+              ? `Moved from ${thread.linkOrigin?.label ?? "another machine"}. Recent text and Git files arrived in a disposable worktree. The original incoming files are retained for recovery. Stop external writers before moving again.`
+              : `Moved from ${thread.linkOrigin?.label ?? "another machine"}. Recent text and Git files arrived in a new worktree. Earlier history and local-only resources remain on the source.`
+          }
         />
+        {recovery ? (
+          <Button
+            tone="text"
+            size="compact"
+            label="Copy recovery command"
+            onPress={() => void Clipboard.setStringAsync(recovery)}
+          />
+        ) : null}
       </View>
     );
   if (!move) return null;
@@ -233,13 +250,21 @@ export function ThreadMoveNotice({
       <Notice
         message={
           move.state === "departed"
-            ? `Moved to ${move.label}. This copy is read only.`
+            ? `Moved to ${move.label}. This copy is read only. ${move.retirement?.reason ?? "Its source files were kept."}`
             : move.state === "failed"
               ? move.lastError
               : (move.lastError ??
                 `Moving to ${move.label}. Messages are paused until the destination confirms.`)
         }
       />
+      {move.state === "departed" && recovery ? (
+        <Button
+          tone="text"
+          size="compact"
+          label="Copy recovery command"
+          onPress={() => void Clipboard.setStringAsync(recovery)}
+        />
+      ) : null}
       <Button
         tone="text"
         size="compact"

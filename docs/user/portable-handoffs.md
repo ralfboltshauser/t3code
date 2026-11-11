@@ -40,6 +40,36 @@ do not start a second copy until that move is resolved. To move back, use `/move
 the destination chat; this creates another fresh worktree and keeps the earlier copies
 as history. Your client may need to connect to the destination before opening it.
 
+Newly moved worktrees are disposable. After their next confirmed move, T3 immediately
+removes an exclusive source checkout and its operation-owned branch when it can
+verify that the destination preserves the captured work. This runs even with age
+cleanup disabled. Stop external editors, shells, builds, and other file writers
+before moving; automatic retirement assumes exclusive use by this T3 environment.
+
+The source reports whether cleanup completed or why files were kept. Project roots,
+older workspaces, shared workspaces, subdirectory bindings, staged work, ignored
+files (including dependency installs), sparse indexes, and changed or unsupported
+files stay on the source. They are preserved data, not disposable cache. Resolve
+the reported condition and run Storage cleanup again, or preserve the local work
+before explicitly removing a retained checkout with Git. Committing new source
+work after a move does not transfer it to the destination.
+
+The destination retains the exact incoming Git version before setup or an agent
+can change it. **Copy recovery command** copies a command to create a separate
+checkout of that version; run it from the destination project's repository. It
+does not reset your current files. Recovery versions remain after onward moves
+and thread deletion. They share Git objects but still consume storage; at 256
+incoming versions in one repository, further imports stop until you deliberately
+review and discard old recovery refs. T3 never expires unique incoming versions
+to make room. Compact retry receipts remain so an old request cannot restart work.
+
+This preserves supported Git file bytes, symlink text, and executable modes under
+normal crash/retry recovery with retained server state. It is a transfer lifecycle,
+not an independent backup against disk loss, restored old databases, uncooperative
+writers, or filesystem metadata that Git does not carry. Keep backups for those
+cases. Older servers can still transfer chats, but their acceptance does not
+authorize automatic source retirement.
+
 ## Context limits
 
 A handoff must leave room for existing provider context, your request and attachments, instructions,
