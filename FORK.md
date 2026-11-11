@@ -158,7 +158,7 @@ embedded side chats share this path; native mobile keeps its existing controls.
 Verify with:
 
 ```sh
-vp test run apps/web/src/composer-logic.test.ts apps/web/src/components/chat/QueuedRunsControl.browser.test.tsx
+vp test run apps/web/src/composer-logic.test.ts apps/web/src/components/chat/QueuedRunsControl.browser.test.tsx apps/web/src/components/chat/ComposerPrimaryActions.browser.test.tsx
 ```
 
 Project headers in the boring sidebar show a thin composition ring and the total
