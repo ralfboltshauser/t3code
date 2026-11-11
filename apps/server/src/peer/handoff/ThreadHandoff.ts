@@ -189,7 +189,7 @@ const make = Effect.gen(function* () {
         `${handoff.handoffId}.bundle`,
       ])
         yield* fs.remove(path.join(dir, name), { force: true });
-      if ((yield* fs.readDirectory(dir)).length === 0) yield* fs.remove(dir);
+      if ((yield* fs.readDirectory(dir)).length === 0) yield* fs.remove(dir, { recursive: true });
     },
     Effect.ignoreCause({ log: true }),
   );

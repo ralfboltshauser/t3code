@@ -279,6 +279,7 @@ it.effect.each([
         assert.equal(uploads, 1);
         const saved = path.join(config.stateDir, "thread-moves", checked.handoffId, "request.json");
         assert.equal(yield* fs.exists(saved), !strong);
+        assert.equal(yield* fs.exists(path.dirname(saved)), !strong);
         if (checked.state === "departed" && strong) {
           assert.equal(checked.retirement?.disposable, owned);
           const changed = yield* service
