@@ -5286,9 +5286,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       function* (_thread) {
         const rows =
           yield* sql<PayloadRow>`SELECT payload_json FROM orchestration_v2_projection_threads
-            WHERE json_extract(payload_json, '$.handoff.state') = 'departing'
-            OR (json_extract(payload_json, '$.handoff.state') = 'departed'
-              AND json_extract(payload_json, '$.handoff.retirement.disposable') = 1)`;
+            WHERE CASE WHEN json_valid(payload_json) THEN
+              json_extract(payload_json, '$.handoff.state') = 'departing'
+              OR (json_extract(payload_json, '$.handoff.state') = 'departed'
+                AND json_extract(payload_json, '$.handoff.retirement.disposable') = 1)
+              ELSE 0 END`;
         return yield* Effect.forEach(rows, (row) => decodeThreadPayload(row.payload_json));
       },
       (effect, thread) =>

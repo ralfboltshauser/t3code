@@ -569,7 +569,17 @@ const themeIconFixture = (source: Uint8Array) =>
     const rewriteCache = fileSystem
       .writeFile(cachePath, new Uint8Array([1]))
       .pipe(Effect.orDie, Effect.provideService(FileSystem.FileSystem, fileSystem));
-    return { root, hicolorDir, appsDir, cachePath, pastSeconds, seedCache, rewriteCache };
+    const caseSensitive = !(yield* fileSystem.exists(path.join(root, "RESOURCES")));
+    return {
+      root,
+      hicolorDir,
+      appsDir,
+      cachePath,
+      pastSeconds,
+      seedCache,
+      rewriteCache,
+      caseSensitive,
+    };
   });
 
 const iconCacheRuns = (run: ThemeIconRun) =>
@@ -585,10 +595,12 @@ it.layer(NodeServices.layer)("DesktopLinuxUrlHandler theme icons", (it) => {
       const run: ThemeIconRun = { root: fixture.root, commands: [] };
 
       yield* registerWithRealFileSystem(run);
-      assert.deepEqual([...(yield* fileSystem.readDirectory(fixture.appsDir))].sort(), [
-        "com.t3tools.T3Code.png",
-        "com.t3tools.t3code.png",
-      ]);
+      assert.deepEqual(
+        [...(yield* fileSystem.readDirectory(fixture.appsDir))].sort(),
+        fixture.caseSensitive
+          ? ["com.t3tools.T3Code.png", "com.t3tools.t3code.png"]
+          : ["com.t3tools.t3code.png"],
+      );
       for (const name of ["com.t3tools.t3code", "com.t3tools.T3Code"]) {
         const target = path.join(fixture.appsDir, `${name}.png`);
         assert.deepEqual([...(yield* fileSystem.readFile(target))], [...icon]);
@@ -614,7 +626,7 @@ it.layer(NodeServices.layer)("DesktopLinuxUrlHandler theme icons", (it) => {
       const lower = path.join(fixture.appsDir, "com.t3tools.t3code.png");
       const upper = path.join(fixture.appsDir, "com.t3tools.T3Code.png");
       yield* fileSystem.writeFile(lower, new Uint8Array([3, 2, 1]));
-      yield* fileSystem.writeFile(upper, new Uint8Array([1, 2, 3]));
+      if (fixture.caseSensitive) yield* fileSystem.writeFile(upper, new Uint8Array([1, 2, 3]));
       for (const target of [lower, upper]) {
         yield* fileSystem.utimes(target, fixture.pastSeconds, fixture.pastSeconds);
       }
@@ -628,8 +640,10 @@ it.layer(NodeServices.layer)("DesktopLinuxUrlHandler theme icons", (it) => {
       yield* registerWithRealFileSystem(run);
 
       assert.deepEqual([...(yield* fileSystem.readFile(lower))], [1, 2, 3]);
-      const upperInfo = yield* fileSystem.stat(upper);
-      assert.equal(Option.getOrThrow(upperInfo.mtime).getTime(), fixture.pastSeconds * 1000);
+      if (fixture.caseSensitive) {
+        const upperInfo = yield* fileSystem.stat(upper);
+        assert.equal(Option.getOrThrow(upperInfo.mtime).getTime(), fixture.pastSeconds * 1000);
+      }
       assert.deepEqual(
         run.commands.filter(({ command }) => command === "gtk-update-icon-cache"),
         [{ command: "gtk-update-icon-cache", args: ["-f", "-t", fixture.hicolorDir] }],

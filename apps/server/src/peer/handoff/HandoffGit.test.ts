@@ -410,6 +410,25 @@ it.layer(layer)("Git bundle pack/apply", (it) => {
         );
     }).pipe(Effect.scoped),
   );
+  it.effect("round-trips an empty tracked tree", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const handoff = yield* HandoffGit.HandoffGit;
+      yield* git(repo.sender, ["checkout", "-b", branch]);
+      yield* git(repo.sender, ["rm", "-r", "."]);
+      yield* git(repo.sender, ["commit", "-m", "empty tree"]);
+      const senderBefore = yield* repositoryState(repo.sender);
+      const receiverBefore = yield* repositoryState(repo.receiver);
+      const packed = yield* handoff.pack({ cwd: repo.sender, handoffId, outDir: repo.outDir });
+      yield* handoff.apply(applyInput(repo, packed));
+      assert.deepEqual(yield* repo.fs.readDirectory(repo.worktree), [".git"]);
+      assert.deepEqual(yield* repositoryState(repo.sender), senderBefore);
+      const receiverAfter = yield* repositoryState(repo.receiver);
+      assert.deepEqual({ ...receiverAfter, refs: receiverBefore.refs }, receiverBefore);
+      assert.equal(yield* git(repo.receiver, ["rev-parse", branch]), packed.tip);
+    }).pipe(Effect.scoped),
+  );
+
   it.effect.each(["branch", "detached subdirectory", "sparse checkout", "sparse receiver"])(
     "round-trips %s without changing either existing checkout",
     (mode) =>
@@ -605,7 +624,8 @@ it.layer(layer)("Git bundle pack/apply", (it) => {
       const before = yield* repositoryState(receiver);
       const worktrees = yield* git(receiver, ["worktree", "list", "--porcelain"]);
       const { handoff, reached } = yield* pauseGit(
-        (input) => input.cwd === worktree && input.args[0] === "checkout",
+        (input) =>
+          input.cwd === worktree && input.args[0] === "read-tree" && input.args.includes("--reset"),
       );
       const packed = yield* handoff.pack({ cwd: sender, handoffId, outDir });
       const fiber = yield* handoff.apply(applyInput(repo, packed)).pipe(Effect.forkScoped);

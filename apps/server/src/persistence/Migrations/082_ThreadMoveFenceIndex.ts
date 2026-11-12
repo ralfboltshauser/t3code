@@ -5,7 +5,9 @@ export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`CREATE INDEX IF NOT EXISTS idx_orchestration_v2_thread_move_fences
     ON orchestration_v2_projection_threads(thread_id)
-    WHERE json_extract(payload_json, '$.handoff.state') = 'departing'
+    WHERE CASE WHEN json_valid(payload_json) THEN
+      json_extract(payload_json, '$.handoff.state') = 'departing'
       OR (json_extract(payload_json, '$.handoff.state') = 'departed'
-        AND json_extract(payload_json, '$.handoff.retirement.disposable') = 1)`;
+        AND json_extract(payload_json, '$.handoff.retirement.disposable') = 1)
+      ELSE 0 END`;
 });

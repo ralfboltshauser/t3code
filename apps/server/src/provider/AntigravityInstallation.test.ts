@@ -764,7 +764,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity inst
         });
 
         const { installation: windows } = yield* makeHarness({ baseDir, platform: "win32" });
-        for (const name of ["agy.EXE", "agy.cmd"]) {
+        for (const name of ["agy.EXE", "agy.CMD"]) {
           const windowsDirectory = path.join(baseDir, `windows-${name}`);
           yield* fs.makeDirectory(windowsDirectory);
           yield* fs.writeFileString(path.join(windowsDirectory, name), "cli");

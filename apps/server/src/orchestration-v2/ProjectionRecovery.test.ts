@@ -554,6 +554,7 @@ it.effect("maintains delegated candidate indexes across legacy rows and payload 
     ]) {
       yield* sql`UPDATE orchestration_v2_projection_threads SET payload_json = ${payload}
         WHERE thread_id = ${child}`;
+      assert.deepEqual(yield* projections.getDepartingWorkspaces({ id: child }), []);
       const expected = payload.includes('"type":"node"') ? [child] : [];
       assert.deepEqual(yield* projections.getRecoveryThreadIds("subagent-results"), expected);
     }
