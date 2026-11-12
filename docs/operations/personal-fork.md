@@ -114,8 +114,18 @@ behind a resumable chat. An orphan source may be removed only with no runtime or
 workspace processes. Unknown activity defers removal. Source cleanup runs on its
 owning machine, with exact-head checks and compare-and-delete refs. Conditional
 deletes may use a SHA lease; rewriting `personal` or `main` remains prohibited.
-Retained work is reported with the reason, not called cleaned. Build caches and
-backups are outside feature-worktree cleanup.
+Retained work is reported with the reason, not called cleaned. Feature-worktree
+cleanup does not prune build caches or backups. Every release also follows the
+[release cleanup policy](../../.agents/skills/t3-fork-release/references/cleanup.md):
+inventory all hosts and clean eligible older artifacts before building, remove
+disposable intermediates after staging, and finish retirement after verified
+deployment. Protect installed, queued and recovery revisions plus the previous
+successful cohort; keep backups for 30 days and at least three successful
+deployments. Audit local/remote branches, worktrees, isolated test state, browser
+revisions and mobile infrastructure against actual ownership and consumers.
+Record before/after sizes, removals and explicit deferrals in canonical
+`state/cleanup/RELEASE_ID.md` and link it in the release handoff. These additional
+steps are required agent work; the idle deployment worker does not run them.
 
 `./update-personal.sh` remains a low-level way to stage already-published personal
 with completed release verification evidence; it does not gather features or merge

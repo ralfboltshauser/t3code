@@ -218,6 +218,16 @@ python3 -m unittest discover -s scripts/personal-fork -p 'test_*.py'
 vp test run scripts/check-changed.test.ts packages/shared/src/testing/longTempDir.test.ts
 ```
 
+Every release also requires the release skill's
+`.agents/skills/t3-fork-release/references/cleanup.md` procedure before builds,
+after staging and after verified deployment. It covers all-host artifact and
+backup retention, local/remote refs, worktree ownership, browser revisions and
+mobile infrastructure. Keep installed/queued/recovery revisions and active user
+work protected; report measured removals and deferrals in canonical local state.
+This is an agent procedure; feature cleanup and the idle worker alone do not
+perform infrastructure retention. Validate skill changes with the skill-creator
+`quick_validate.py` and `vp run check:changed`.
+
 `thread.toggleUnread` is an unbound command in Keybindings settings that toggles
 the active persisted chat between read and unread using its latest completed
 result and server-first visit watermark. Marking read visits that completion;

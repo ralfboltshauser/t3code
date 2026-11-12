@@ -7,7 +7,7 @@ description: Release ready personal T3 features together with upstream updates, 
 
 Read [the operations guide](../../../docs/operations/personal-fork.md). An explicit
 release request authorizes normal publication, all-inventory staging and guarded
-cleanup of included features. Feature completion alone does not authorize release.
+cleanup under the [release cleanup policy](references/cleanup.md). Feature completion alone does not authorize release.
 Never create PRs or force-update `personal`/`main`. Missing hosts remain required.
 
 Use canonical shared state (`manage.py paths`), not a worktree-local controller.
@@ -18,6 +18,16 @@ and any deployment journal first. Run `workflow.py finalize` to finish eligible
 cleanup from prior releases and report retained work. An incomplete cutover needs
 recovery, not a new release. Use the coordinator from the latest canonical source; do not trust an old
 worktree's skill or script over newer published instructions.
+
+On EVERY release, run the cleanup policy's inventory and eligible old-release
+cleanup before creating/building a candidate. Run it again after staging, before
+ending the turn, to remove disposable build intermediates and record deployment
+dependent deferrals. On status/resume after verified deployment, finish the
+remaining cleanup. `workflow.py finalize` handles feature retirement only; it does
+not clean builds, backups, browser caches or simulators. Perform those steps
+explicitly on every inventory host and save the measured results in canonical
+`state/cleanup/RELEASE_ID.md`. A release handoff must say which cleanup phase
+finished and which items remain; staging alone does not complete cleanup.
 
 ## Freeze, integrate and check
 
@@ -75,7 +85,8 @@ worker owns shutdown, stopped-state backups, cutover and health checks.
 For a status/resume request, read the existing release record and live status;
 do not freeze another batch or repeat already successful checks without cause.
 After ALL inventory hosts run the exact commit, run `workflow.py cleanup RELEASE_ID`
-and `workflow.py report RELEASE_ID`. It never deletes unrelated/unincluded branches,
+and `workflow.py report RELEASE_ID`, then complete the cleanup policy on every
+host. It never deletes unrelated/unincluded branches,
 advanced/dirty workspaces or a workspace still owned by T3. Runtime/process ownership
 that cannot be proved safe defers deletion. Use T3's existing Storage cleanup to
 retire chat-owned workspaces; do not write live SQLite or remove directories behind
@@ -85,5 +96,8 @@ branch history. Preserve readiness/release records so included commits stay trac
 
 Report user-visible features, upstream range/highlights, checks/limits, exact source
 SHA, per-host staged/pending/verified state, removed branches/worktrees and every
-retained item with its reason. Link the generated Markdown report. A staged build
+retained item with its reason. Include before/after disk measurements, build and
+backup retention, local/remote branch outcomes, worktree ownership deferrals,
+and browser/emulator results. Link both the generated release report and the
+cleanup record. A staged build
 is not an installed release. Do not restart the host to finish your own task.
