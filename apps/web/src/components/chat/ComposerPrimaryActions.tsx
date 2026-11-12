@@ -63,6 +63,7 @@ interface ComposerPrimaryActionsProps {
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   compactBeforeSendTokens?: number | null;
+  hideCompactToggle?: boolean;
   keepFullHistory?: boolean;
   onToggleKeepFullHistory?: () => void;
 }
@@ -120,6 +121,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   onPreviousPendingQuestion,
   onInterrupt,
   compactBeforeSendTokens = null,
+  hideCompactToggle = false,
   keepFullHistory = false,
   onToggleKeepFullHistory,
 }: ComposerPrimaryActionsProps) {
@@ -380,7 +382,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       </TooltipPopup>
     </Tooltip>
   );
-  if (compactTokens === null) {
+  if (compactTokens === null || hideCompactToggle) {
     return withStopButton(
       <>
         {children}

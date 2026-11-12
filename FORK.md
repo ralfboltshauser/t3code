@@ -38,7 +38,7 @@ guarded RPCs, peer forwarding, and web/native entry points. Reconcile with upstr
 import/Git/handoff stack rather than retaining duplicate implementations when it lands.
 
 ```sh
-vp test run apps/server/src/peer/handoff apps/server/src/orchestration-v2/ThreadImportService.test.ts packages/client-runtime/src/state/commandPermissions.test.ts
+vp test run apps/server/src/peer/handoff apps/server/src/orchestration-v2/ThreadImportService.test.ts apps/server/src/orchestration-v2/ThreadManagementService.test.ts apps/server/src/orchestration-v2/ProviderTurnControlService.test.ts apps/server/src/peer/PeerForwarding.test.ts apps/server/src/peer/PeerLinkRequests.test.ts apps/server/src/peer/RemoteDelegation.test.ts apps/server/src/mcp/OrchestratorMcpToolkit.integration.test.ts apps/server/src/mcp/linkOrigin.test.ts apps/server/src/mcp/toolkits/core.test.ts apps/server/src/provider/AgentContextBudget.test.ts apps/server/src/process/externalLauncher.test.ts apps/server/src/ws.test.ts packages/client-runtime/src/state/commandPermissions.test.ts apps/web/src/hooks/useThreadActionMenu.test.ts
 ```
 
 These checks cover source staging preservation, Git failure cleanup, immutable
@@ -106,7 +106,7 @@ Verify with:
 
 ```sh
 python3 -m unittest discover -s scripts/personal-fork -p 'test_*.py'
-vp test run packages/shared/src/t3ProjectFile.test.ts apps/web/src/hooks/useHandleNewThread.test.ts apps/mobile/src/features/threads/new-task-context-presentation.test.ts apps/mobile/src/state/pending-new-tasks-model.test.ts
+vp test run packages/shared/src/t3ProjectFile.test.ts apps/web/src/hooks/useHandleNewThread.test.ts apps/mobile/src/features/threads/new-task-context-presentation.test.ts apps/mobile/src/state/pending-new-tasks-model.test.ts apps/mobile/src/features/threads/new-task-flow-provider.test.tsx apps/mobile/src/features/threads/NewTaskDraftRouteScreen.test.tsx
 ```
 
 Embedded side chats share their host panel's F6 stop and per-tab focus history.
@@ -156,7 +156,7 @@ Owning modules are `packages/client-runtime/src/sidebarProfiles.ts`, web
 Verify precedence, reversible moves, concurrent durable writes, and UI scoping:
 
 ```sh
-vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src/settings/DesktopSidebarProfiles.test.ts apps/web/src/sidebarProfilesStorage.browser.test.ts apps/web/src/components/SidebarProfiles.browser.test.tsx apps/mobile/src/state/sidebar-profiles.test.tsx apps/web/src/components/SidebarProfiles.startup.browser.test.tsx
+vp test run packages/client-runtime/src/sidebarProfiles.test.ts apps/desktop/src/settings/DesktopSidebarProfiles.test.ts apps/web/src/sidebarProfilesStorage.browser.test.ts apps/web/src/components/SidebarProfiles.browser.test.tsx apps/mobile/src/state/sidebar-profiles.test.tsx apps/web/src/components/SidebarProfiles.startup.browser.test.tsx apps/desktop/src/app/DesktopApp.test.ts apps/mobile/src/features/projects/AddProjectScreen.test.ts apps/mobile/src/features/connection/ConnectionsNewRouteScreen.test.tsx apps/mobile/src/features/settings/SettingsServerControlsRouteScreen.test.tsx
 ```
 
 The boring sidebar reuses the Working-section setting to fold independent work

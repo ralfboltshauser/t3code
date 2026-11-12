@@ -119,11 +119,16 @@ Update the candidate's `FORK.md` intentional-differences section with:
 
 - intended behavior and the reason it differs from upstream;
 - owning modules and upstream connection points a future merge must inspect;
-- a focused verification command and the essential behavioral assertions;
+- verification commands covering every regression test that protects the personal
+  behavior, including component/browser tests and fixtures added outside its main
+  owning module, plus the essential assertions and required client evidence;
 - any intentional removal or upstream behavior that must remain disabled.
 
 Keep this as the single behavior manifest; do not create a second feature ledger
-elsewhere. It is what detects semantic regressions after a clean merge.
+elsewhere. Check the commands against the final feature diff before marking ready:
+a new regression test omitted from the manifest can be missed by a later upstream
+preservation pass even when the merge is clean. It is what detects semantic
+regressions after a clean merge.
 
 Finish by committing only settled feature changes and running:
 

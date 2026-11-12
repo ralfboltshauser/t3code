@@ -51,10 +51,34 @@ Follow [t3-fork-upstream](../t3-fork-upstream/SKILL.md) for EVERY `FORK.md` beha
 including clean merges. Compare features with one another too. Queue ambiguous
 product choices in canonical decisions.md and preserve the candidate.
 
-Run the candidate's manifest checks and focused interaction tests, and perform
-the required integrated client pass. Record their real commands/results in
-`--checks`. The coordinator runs `check:changed` against the pinned personal
-revision itself; use this one invocation so release checks cannot overlap:
+Before the full release gate, complete this preflight in order:
+
+1. Trace changed upstream interfaces through callers, imports and test fixtures in
+   every owning client, including files Git merged cleanly. Follow returned identities
+   through personal state updates: upstream may reuse an existing project instead
+   of the requested ID. A repaired web caller does not establish native correctness.
+2. Complete candidate setup under `AGENTS.md`. When desktop code is in the batch,
+   run the candidate's `ensure:electron` script before desktop tests; dependency
+   installation alone does not initialize the Electron binary.
+3. Run package-scoped typechecks for affected owning packages, including each
+   affected client, and focused tests/compiler cases for the repaired interfaces.
+   Fix all diagnostics and rerun each failed step until it exits zero; a compiler
+   may reveal obsolete fixture props one at a time. This catches cheap failures
+   before hundreds of tests run.
+4. Reconcile manifest commands with the actual regression files and correct omitted
+   fork checks. Run those checks and focused interaction tests. Run Vitest invocations
+   sequentially in this candidate because they share a writable test cache.
+   Commit settled changes before the integrated client pass. If that pass needs
+   repairs, stop your dev server before committing: commit hooks may temporarily
+   stash source files and make a running client load the wrong tree.
+5. Complete the required client pass, stop the dev processes you started, and let
+   generated inputs settle before `verify`. Record actual commands, results and
+   missing evidence in `--checks`; source inspection is not runtime proof, and
+   DOM assertions do not replace required visual captures.
+
+These preflight results do not replace release evidence. The coordinator runs
+`check:changed` against the pinned personal revision itself; use this one invocation
+so release checks cannot overlap:
 
 ```sh
 python3 scripts/personal-fork/workflow.py verify RELEASE_ID --checks "Manifest, interaction and client commands/results"
@@ -65,8 +89,13 @@ python3 scripts/personal-fork/workflow.py report RELEASE_ID
 
 Wait for `verify` to exit zero and record completed evidence before publishing.
 Its printed log path or a passing individual step is progress, not completion.
-On failure, inspect that log, fix and commit the candidate, then rerun `verify`.
-It rejects source edits during checks, including edits restored to their old bytes.
+Run it in an owned persistent tty with output logged so it can be interrupted.
+Inspect the log while it runs. Once a step reports a definitive failure, interrupt
+that terminal, wait for the coordinator and its checks to stop, and confirm the
+failed receipt before editing. Letting the remaining tests run cannot make that
+attempt publishable. Preserve the log/receipt, repair and rerun the failed step
+until green, commit, then start a fresh `verify`. It rejects source edits during
+checks, including edits restored to their old bytes.
 Publish and stage revalidate the recorded inputs and completed process evidence;
 legacy prose-only verification must be rerun.
 
@@ -74,8 +103,7 @@ legacy prose-only verification must be rerun.
 personal into the candidate, inspect interactions and reverify; never overwrite it.
 `stage` builds the exact published commit on independent hosts concurrently and
 queues only after every required artifact passes validation. An ancestor pending
-revision
-can be superseded under the release lock before cutover; divergent queues or any
+revision can be superseded under the release lock before cutover; divergent queues or any
 cutover journal block it. Failed builds preserve the prior queue/installations.
 Release the integration lock and end the turn after staging; the independent
 worker owns shutdown, stopped-state backups, cutover and health checks.
@@ -99,5 +127,8 @@ SHA, per-host staged/pending/verified state, removed branches/worktrees and ever
 retained item with its reason. Include before/after disk measurements, build and
 backup retention, local/remote branch outcomes, worktree ownership deferrals,
 and browser/emulator results. Link both the generated release report and the
-cleanup record. A staged build
-is not an installed release. Do not restart the host to finish your own task.
+cleanup record. A staged build is not an installed release. Rewrite the final
+summary around the latest observed state; keep attempt history in logs/receipts
+rather than appending contradictory "still running" and "passed" accounts. Keep
+unavailable required evidence explicit and unresolved instead of describing that
+check as complete. Do not restart the host to finish your own task.
