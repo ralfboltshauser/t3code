@@ -23,6 +23,7 @@ import * as Schema from "effect/Schema";
 
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as ProjectStore from "./ProjectStore.ts";
+import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 
@@ -75,7 +76,11 @@ export class ThreadImportService extends Context.Service<
         readonly interactionMode: ProviderInteractionMode;
         readonly linkOrigin: OrchestrationV2LinkOrigin | undefined;
         readonly workspace?: Effect.Effect<
-          { readonly worktreePath: string; readonly branch: string },
+          {
+            readonly worktreePath: string;
+            readonly branch: string;
+            readonly incomingSnapshot?: { readonly snapshot: string; readonly ref: string };
+          },
           OrchestratorMcpFailure
         >;
       },
@@ -100,6 +105,7 @@ const make = Effect.gen(function* () {
   const threads = yield* ThreadManagement.ThreadManagementService;
   const launcher = yield* ThreadLaunchService.ThreadLaunchService;
   const projects = yield* ProjectStore.ProjectStoreV2;
+  const receipts = yield* CommandReceiptStore.CommandReceiptStoreV2;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -133,6 +139,12 @@ const make = Effect.gen(function* () {
         const existing = yield* threads
           .getThreadShell(threadId)
           .pipe(Effect.mapError(wrap("read")));
+        const receipt = yield* receipts
+          .getByCommandId(commandId)
+          .pipe(Effect.mapError(wrap("read")));
+        if (existing === null && Option.isSome(receipt) && receipt.value.status === "accepted") {
+          return yield* new ThreadImportDeletedError({ threadId });
+        }
         if (
           existing !== null &&
           (existing.importOrigin?.fingerprint !== inputFingerprint ||
@@ -152,6 +164,7 @@ const make = Effect.gen(function* () {
         const launchWorkspace = (workspace: {
           readonly worktreePath: string;
           readonly branch: string | null;
+          readonly incomingSnapshot?: { readonly snapshot: string; readonly ref: string };
         }) =>
           launcher
             .launch({
@@ -168,7 +181,13 @@ const make = Effect.gen(function* () {
                 ...(workspace.branch ? { branch: workspace.branch } : {}),
               },
               importedConversation: {
-                origin: { ...input.source, fingerprint: inputFingerprint },
+                origin: {
+                  ...input.source,
+                  fingerprint: inputFingerprint,
+                  ...(workspace.incomingSnapshot
+                    ? { incomingSnapshot: workspace.incomingSnapshot }
+                    : {}),
+                },
                 messages: input.messages,
               },
               ...(input.continuationPrompt
@@ -244,7 +263,15 @@ const make = Effect.gen(function* () {
           }
         }
         if (existing !== null && input.bundle && existing.worktreePath) {
-          yield* launchWorkspace({ worktreePath: existing.worktreePath, branch: existing.branch });
+          const original = yield* threads
+            .getThreadRecords(threadId, ["messages"], { messageIds: [messageId] })
+            .pipe(Effect.mapError(wrap("read")));
+          if (input.continuationPrompt && original.messages.length === 0 && !existing.handoff) {
+            yield* launchWorkspace({
+              worktreePath: existing.worktreePath,
+              branch: existing.branch,
+            });
+          }
         }
         const projection = yield* threads
           .getThreadRecords(threadId, ["messages"], { messageIds: [messageId] })

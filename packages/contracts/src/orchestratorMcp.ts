@@ -38,6 +38,8 @@ import { ThreadTitleRegeneration } from "./threadTitle.ts";
 import {
   OrchestrationV2ImportedMessage,
   OrchestrationV2ImportedMessages,
+  OrchestrationV2ImportOrigin,
+  OrchestrationV2ThreadHandoff,
   OrchestrationV2Actor,
   OrchestrationV2CreationSource,
   OrchestrationV2RunStatus,
@@ -452,6 +454,8 @@ export const OrchestratorMcpThreadDetail = Schema.Struct({
   titleRegeneration: Schema.NullOr(ThreadTitleRegeneration),
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
+  handoff: Schema.optional(OrchestrationV2ThreadHandoff),
+  importOrigin: Schema.optional(OrchestrationV2ImportOrigin),
   parentThreadId: Schema.NullOr(ThreadId),
   relationshipToParent: Schema.NullOr(Schema.Literals(["fork", "subagent"])),
   runCount: NonNegativeInt,
@@ -679,6 +683,13 @@ export const OrchestratorMcpThreadImportResult = Schema.Struct({
   projectId: ProjectId,
   created: Schema.Boolean,
   runId: Schema.NullOr(RunId),
+  incomingSnapshot: Schema.optional(
+    Schema.Struct({
+      version: Schema.Literal(1),
+      snapshot: Schema.String,
+      ref: Schema.String,
+    }),
+  ),
 });
 export type OrchestratorMcpThreadImportResult = typeof OrchestratorMcpThreadImportResult.Type;
 

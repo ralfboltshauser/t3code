@@ -111,7 +111,7 @@ export interface ThreadLaunchInput {
 
 type PreparationInput = Pick<
   ThreadLaunchInput,
-  "commandId" | "projectId" | "workspaceStrategy" | "initialMessage"
+  "commandId" | "projectId" | "workspaceStrategy" | "initialMessage" | "importedConversation"
 > & {
   readonly reusedWorktree?: { readonly baseRef: string };
 };
@@ -312,7 +312,8 @@ const make = Effect.gen(function* () {
     );
 
     const reused = input.reusedWorktree;
-    const tracked = input.workspaceStrategy.type === "worktree" || reused !== undefined;
+    const imported = input.importedConversation?.origin?.incomingSnapshot !== undefined;
+    const tracked = input.workspaceStrategy.type === "worktree" || reused !== undefined || imported;
     let createdWorktreePath: string | null = null;
     let createdBranch: string | null = null;
     let setupTerminalId: string | null = null;
@@ -328,11 +329,11 @@ const make = Effect.gen(function* () {
         stages: ["fetch", "checkout", "setup-script", "agent"],
         fiber: yield* Effect.fiber,
       });
-    } else if (reused !== undefined) {
+    } else if (reused !== undefined || imported) {
       yield* setupTracker.begin({
         threadId,
         branch: input.workspaceStrategy.branch ?? null,
-        baseRef: reused.baseRef,
+        baseRef: reused?.baseRef ?? "HEAD",
         stages: ["setup-script", "agent"],
         fiber: yield* Effect.fiber,
       });
@@ -1171,6 +1172,9 @@ const make = Effect.gen(function* () {
         projectId: thread.projectId,
         workspaceStrategy: reuse?.strategy ?? workspacePreparation,
         ...(reuse === null ? {} : { reusedWorktree: reuse.reusedWorktree }),
+        ...(thread.importOrigin
+          ? { importedConversation: { origin: thread.importOrigin, messages: [] } }
+          : {}),
         ...(message === undefined
           ? {}
           : {

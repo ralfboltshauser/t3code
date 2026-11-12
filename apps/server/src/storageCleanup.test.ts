@@ -10,6 +10,7 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import type * as Path from "effect/Path";
 import type * as Scope from "effect/Scope";
+import type { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 import * as Stream from "effect/Stream";
 import { SCAN_CACHE_FILE_NAME } from "./usage/usageScanCache.ts";
 import { TestClock } from "effect/testing";
@@ -35,9 +36,12 @@ import * as TerminalManager from "./terminal/Manager.ts";
 import { CodexProviderCapabilitiesV2 } from "./orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { ServerActivation } from "./serverActivation.ts";
 import { withWorkspaceLease } from "./workspace/workspaceLease.ts";
+import { idleThreadProjection, liveThreadShell } from "./mcp/McpToolAccess.testkit.ts";
 import { describe, expect, it } from "@effect/vitest";
 import {
   EventId,
+  EnvironmentId,
+  type OrchestrationV2AppThread,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -342,6 +346,8 @@ const cleanupFixture = (
     };
     let threads = [shell({ branch: "feature", worktreePath: worktree })];
     let deletedThreads: OrchestrationV2ThreadShell[] = [];
+    let movedThreads: OrchestrationV2AppThread[] = [];
+    const moveChecked = yield* Deferred.make<void>();
     let storedWorktreePaths: string[] = [worktree];
     let projectRoots = [repo];
     let editBeforeRemoval = false;
@@ -428,6 +434,19 @@ const cleanupFixture = (
       } as unknown as ProviderSessionManager.ProviderSessionManagerV2["Service"]),
       Effect.provideService(Orchestrator.OrchestratorV2, {
         streamDomainEvents: Stream.suspend(() => events),
+        dispatch: (command: import("@t3tools/contracts").OrchestrationV2ServerCommand) =>
+          Effect.gen(function* () {
+            if (command.type === "thread.handoff.update" && command.handoff) {
+              movedThreads = movedThreads.map((thread) =>
+                thread.id === command.threadId ? { ...thread, handoff: command.handoff! } : thread,
+              );
+              threads = threads.map((thread) =>
+                thread.id === command.threadId ? { ...thread, handoff: command.handoff! } : thread,
+              );
+              yield* Deferred.succeed(moveChecked, undefined);
+            }
+            return { sequence: 1, storedEvents: [] };
+          }),
       } as unknown as Orchestrator.OrchestratorV2["Service"]),
       Effect.provideService(SqlClient.SqlClient, ((strings: TemplateStringsArray) =>
         Effect.sync(() =>
@@ -450,17 +469,19 @@ const cleanupFixture = (
               ]
             : outboxStatus !== null && strings.join("").includes("orchestration_v2_effect_outbox")
               ? [{ status: outboxStatus }]
-              : strings.join("").includes("deleted_at IS NOT NULL")
-                ? deletedThreads.map((thread) => ({
-                    payload_json: JSON.stringify(thread),
-                    workspaceRoot: repo,
-                  }))
-                : strings.join("").includes('AS "worktreePath"')
-                  ? [
-                      ...threads.flatMap((thread) => thread.worktreePath ?? []),
-                      ...storedWorktreePaths,
-                    ].map((worktreePath) => ({ worktreePath }))
-                  : [],
+              : strings.join("").includes("'$.handoff.state'")
+                ? movedThreads.map((thread) => ({ payload_json: JSON.stringify(thread) }))
+                : strings.join("").includes("deleted_at IS NOT NULL")
+                  ? deletedThreads.map((thread) => ({
+                      payload_json: JSON.stringify(thread),
+                      workspaceRoot: repo,
+                    }))
+                  : strings.join("").includes('AS "worktreePath"')
+                    ? [
+                        ...threads.flatMap((thread) => thread.worktreePath ?? []),
+                        ...storedWorktreePaths,
+                      ].map((worktreePath) => ({ worktreePath }))
+                    : [],
         )) as unknown as SqlClient.SqlClient),
       Effect.provideService(GitManager.GitManager, {
         invalidateStatus: () => Effect.void,
@@ -519,6 +540,12 @@ const cleanupFixture = (
       },
       setThreads: (next: typeof threads) => {
         threads = next;
+      },
+      moveChecked: Deferred.await(moveChecked),
+      movedThreads: () => movedThreads,
+      setMovedThreads: (next: typeof movedThreads) => {
+        movedThreads = next;
+        threads = next.map((thread) => shell({ ...thread }));
       },
       setOnLiveCheck: (hook: Effect.Effect<void>) => {
         onLiveCheck = hook;
@@ -602,8 +629,66 @@ const runCleanupTest = <A, E>(
     | GitVcsDriver.GitVcsDriver
     | Path.Path
     | Scope.Scope
+    | ChildProcessSpawner
   >,
 ) => effect.pipe(Effect.provide(cleanupTestLayer), Effect.scoped);
+
+it.effect("checks a newly accepted move immediately with every age policy disabled", () =>
+  runCleanupTest(
+    Effect.gen(function* () {
+      const fixture = yield* cleanupFixture(DEFAULT_SERVER_SETTINGS.storageCleanup);
+      const thread = {
+        ...idleThreadProjection(liveThreadShell(ThreadId.make("moved-source"))).thread,
+        projectId: ProjectId.make("project-1"),
+        branch: "feature",
+        worktreePath: fixture.worktree,
+        handoff: {
+          state: "departed" as const,
+          handoffId: "accepted-move",
+          environmentId: EnvironmentId.make("remote"),
+          label: "Remote",
+          threadId: ThreadId.make("remote-thread"),
+          retirement: {
+            root: fixture.worktree,
+            tip: "a".repeat(40),
+            snapshot: "b".repeat(40),
+            status: "pending" as const,
+            reason: "Checking",
+          },
+        },
+      };
+      const event = {
+        id: EventId.make("accepted-move"),
+        type: "thread.metadata-updated",
+        threadId: thread.id,
+        occurredAt: at(0),
+        payload: thread,
+      } as OrchestrationV2DomainEvent;
+      yield* fixture.activate(
+        Stream.fromEffect(
+          fixture.service.reports.pipe(
+            Stream.filter((report) => report !== null),
+            Stream.runHead,
+            Effect.tap(() => Effect.sync(() => fixture.setMovedThreads([thread]))),
+            Effect.as(event),
+          ),
+        ),
+      );
+      yield* fixture.moveChecked;
+      yield* fixture.service.drain;
+      expect(fixture.movedThreads()[0]?.handoff).toMatchObject({
+        state: "departed",
+        retirement: { status: "kept" },
+      });
+      expect(yield* fixture.fs.exists(fixture.worktree)).toBe(true);
+      expect(
+        (yield* fixture.service.latestReport)?.entries.some((entry) =>
+          entry.reason.includes("not created as a disposable"),
+        ),
+      ).toBe(true);
+    }),
+  ),
+);
 
 const submoduleCleanupFixture = () =>
   Effect.gen(function* () {

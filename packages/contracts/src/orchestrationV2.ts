@@ -162,6 +162,19 @@ export const OrchestrationV2ThreadHandoff = Schema.Union([
     label: Schema.String,
     threadId: ThreadId,
     link: Schema.optional(Schema.String),
+    retirement: Schema.optional(
+      Schema.Struct({
+        root: Schema.String,
+        tip: Schema.String,
+        snapshot: Schema.String,
+        disposable: Schema.optional(Schema.Boolean),
+        status: Schema.Literals(["pending", "kept", "removed"]),
+        reason: Schema.String,
+      }),
+    ),
+    request: Schema.optional(
+      Schema.Struct({ projectId: ProjectId, continuationDigest: Schema.String }),
+    ),
   }),
   Schema.Struct({
     state: Schema.Literal("failed"),
@@ -483,6 +496,7 @@ export const OrchestrationV2ImportOrigin = Schema.Struct({
   threadId: ThreadId,
   handoffId: TrimmedNonEmptyString,
   fingerprint: Schema.String,
+  incomingSnapshot: Schema.optional(Schema.Struct({ snapshot: Schema.String, ref: Schema.String })),
 });
 export type OrchestrationV2ImportOrigin = typeof OrchestrationV2ImportOrigin.Type;
 

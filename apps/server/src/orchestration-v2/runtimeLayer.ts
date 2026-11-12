@@ -285,6 +285,7 @@ const layerThreadImportProvided = ThreadImportService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       layerThreadLaunchProvided,
+      layerCommandReceiptStoreProvided,
       layerThreadManagementProvided,
       layerProjectService,
       ProjectionStore.layer,

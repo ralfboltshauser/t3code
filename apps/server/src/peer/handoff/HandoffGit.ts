@@ -78,6 +78,7 @@ export class HandoffGitStepError extends Schema.TaggedError<HandoffGitStepError>
         "index-too-large",
         "invalid-path",
         "workspace-changing",
+        "branch-exists",
       ]),
     ),
     cause: Schema.optional(Schema.Defect()),
@@ -85,6 +86,8 @@ export class HandoffGitStepError extends Schema.TaggedError<HandoffGitStepError>
 ) {
   override get message(): string {
     switch (this.reason) {
+      case "branch-exists":
+        return "The move's branch name is already in use. Existing files and references were kept.";
       case "workspace-changing":
         return "The workspace changed while it was captured. Stop external writers and try again.";
       case "bundle-not-written":
@@ -127,6 +130,7 @@ export class HandoffGit extends Context.Service<
       readonly branch: string | null;
       readonly tip: string;
       readonly snapshot: string;
+      readonly ownWorkspace?: boolean;
     }) => Effect.Effect<{ readonly branch: string | null }, HandoffGitError>;
   }
 >()("t3/peer/handoff/HandoffGit") {}
@@ -395,6 +399,19 @@ const make = Effect.gen(function* () {
       input.bundlePath,
       snapshotRef,
     ]);
+    if (input.ownWorkspace) {
+      // The received version must survive setup, provider edits, and Git GC.
+      const ref = `refs/t3code/moves/${input.handoffId}/incoming`;
+      yield* Effect.acquireRelease(
+        git(input.repoRoot, ["update-ref", "--no-deref", ref, input.snapshot, ""]),
+        (_, exit) =>
+          Exit.isFailure(exit)
+            ? git(input.repoRoot, ["update-ref", "--no-deref", "-d", ref, input.snapshot]).pipe(
+                Effect.ignore,
+              )
+            : Effect.void,
+      );
+    }
     const requestedPath = path.resolve(input.worktreePath);
     const parent = yield* fileSystem
       .realPath(path.dirname(requestedPath))
@@ -424,6 +441,9 @@ const make = Effect.gen(function* () {
       });
       const current = existing.exitCode === 0 ? existing.stdout.trim() : "";
       const checkedOut = worktrees.includes(`branch ${ref}`);
+      if (input.ownWorkspace && current !== "") {
+        return yield* new HandoffGitStepError({ step: "worktree", reason: "branch-exists" });
+      }
       if (checkedOut && current !== input.tip) {
         return yield* new HandoffBranchCheckedOutError({ branch });
       }

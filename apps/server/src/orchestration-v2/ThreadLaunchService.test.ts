@@ -16,6 +16,7 @@ import {
   type ChatAttachment,
   CommandId,
   DEFAULT_SERVER_SETTINGS,
+  EnvironmentId,
   GitCommandError,
   MessageId,
   ProjectId,
@@ -2344,6 +2345,67 @@ it.effect("stops an in-flight branch rename when tracked setup is cancelled", ()
       assert.equal(
         harness.deleteLocalBranch.mock.calls[0]?.[0].refName,
         harness.createWorktree.mock.calls[0]?.[0].newRefName,
+      );
+    }).pipe(Effect.provide(harness.layer));
+  }),
+);
+
+it.effect.each([false, true])("observes imported setup completion (async=%s)", (async) =>
+  Effect.gen(function* () {
+    const entered = yield* Deferred.make<boolean>();
+    const completion = yield* Deferred.make<{ exitCode: number | null; durationMs: number }>();
+    const harness = makeHarness({
+      runSetup: (input) =>
+        Deferred.succeed(entered, input.observeCompletion !== undefined).pipe(
+          Effect.as({
+            status: "started" as const,
+            async,
+            scriptId: "setup",
+            scriptName: "Setup",
+            scriptCommand: "setup",
+            terminalId: "setup",
+            cwd: "/repo-worktrees/feature",
+            completion: Deferred.await(completion),
+          }),
+        ),
+    });
+    yield* Effect.gen(function* () {
+      const launched = yield* (yield* ThreadLaunch.ThreadLaunchService).launch({
+        ...launchInput({
+          command: `command:import-setup:${async}`,
+          thread: `thread:import-setup:${async}`,
+          message: "Continue",
+          workspace: {
+            type: "existing_worktree",
+            worktreePath: "/repo-worktrees/feature",
+            branch: "feature",
+          },
+        }),
+        importedConversation: {
+          origin: {
+            environmentId: EnvironmentId.make("source"),
+            threadId: ThreadId.make("source"),
+            handoffId: "import",
+            fingerprint: "import",
+            incomingSnapshot: {
+              snapshot: "a".repeat(40),
+              ref: "refs/t3code/moves/import/incoming",
+            },
+          },
+          messages: [],
+        },
+      });
+      assert.isTrue(yield* Deferred.await(entered));
+      const tracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
+      yield* Deferred.succeed(completion, { exitCode: 0, durationMs: 1 });
+      yield* tracker.stream(launched.threadId).pipe(
+        Stream.filter((snapshot) => snapshot?.phase === "done"),
+        Stream.runHead,
+      );
+      assert.equal(
+        (yield* tracker.get(launched.threadId))?.stages.find((stage) => stage.id === "setup-script")
+          ?.status,
+        "done",
       );
     }).pipe(Effect.provide(harness.layer));
   }),

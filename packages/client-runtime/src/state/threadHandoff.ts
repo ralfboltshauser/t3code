@@ -1,3 +1,4 @@
+import type { OrchestrationV2ImportOrigin } from "@t3tools/contracts";
 import { WS_METHODS } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
@@ -28,4 +29,13 @@ export function createThreadHandoffEnvironmentAtoms<R, E>(
       },
     }),
   };
+}
+
+export function incomingMoveRecoveryCommand(
+  origin: OrchestrationV2ImportOrigin | undefined,
+): string | null {
+  if (!origin?.incomingSnapshot || !/^[a-zA-Z0-9-]{1,128}$/.test(origin.handoffId)) return null;
+  const ref = `refs/t3code/moves/${origin.handoffId}/incoming`;
+  if (origin.incomingSnapshot.ref !== ref) return null;
+  return `git worktree add --detach ../t3-move-recovery-${origin.handoffId} ${ref}`;
 }
