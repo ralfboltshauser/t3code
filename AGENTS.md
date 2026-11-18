@@ -7,6 +7,10 @@ share the parent's feature. Explicit "merge and build" / release requests use
 `t3-fork-release`; daily maintenance only inspects upstream. `main` remains an
 upstream mirror.
 
+Before discussing, planning, or implementing a new T3 Code feature, use
+[t3-explore](.agents/skills/t3-explore/SKILL.md) to research upstream and community
+work first. Its findings inform whether to reuse, wait, adapt, or build.
+
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity, Kiro) and serves web, desktop, and mobile clients.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.

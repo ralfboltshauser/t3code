@@ -13,6 +13,13 @@ Git or a worktree instead of switching the canonical checkout to `main`.
 Use `.agents/skills/t3-fork-feature/SKILL.md` for feature work and
 `.agents/skills/t3-fork-upstream/SKILL.md` for upstream integration.
 
+New product feature questions, plans and implementation requests first use
+`.agents/skills/t3-explore/SKILL.md` for current upstream GitHub, public team/X
+and community research. `AGENTS.md` and `t3-fork-feature` route to it so overlap,
+maintainer intent and uncertainty inform whether to reuse, wait, adapt or build.
+Routine bug fixes, releases and fork-tooling maintenance are outside this step.
+Validate changes with skill-creator's `quick_validate.py` and `vp run check:changed`.
+
 Feature work follows `t3-fork-feature` and ends ready on a pushed feature branch.
 Only an explicit `t3-fork-release` / "merge and build" request gathers ready
 features plus upstream and stages a release. Side chats share their parent's

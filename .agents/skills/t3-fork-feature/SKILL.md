@@ -5,6 +5,11 @@ description: Implement personal T3 Code features and fixes from this maintenance
 
 # Implement a fork feature
 
+For a new product feature, complete
+[t3-explore](../t3-explore/SKILL.md) before selecting an implementation. Reuse
+the current thread's findings when already completed; routine bug fixes and
+fork-tooling maintenance do not require feature exploration.
+
 Read [the operations guide](../../../docs/operations/personal-fork.md) for standing
 delivery policy. This repository root owns both product code and maintenance
 skills/scripts on `personal`; `main` remains an upstream mirror. Use
