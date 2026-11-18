@@ -490,3 +490,19 @@ it("dismisses a wake at its timestamp without hiding a later wake", () => {
   expect(isThreadWokeUnseen({ ...state, lastVisitedAt: firstWake })).toBe(false);
   expect(isThreadWokeUnseen({ ...state, lastVisitedAt: firstWake, wokeAt: NOW })).toBe(true);
 });
+
+it("keeps backlog parked through new requests and failures until explicitly restored", () => {
+  for (const pending of [undefined, "approval", "user-input"] as const) {
+    const shell = makeShell({
+      snoozedUntil: "9999-12-31T23:59:59.999Z",
+      sessionStatus: "error",
+      ...(pending === undefined ? {} : { pending }),
+      pendingUserInputAt: NOW,
+      turnCompletedAt: NOW,
+    });
+    expect(effectiveSnoozed(shell, { now: NOW })).toBe(true);
+    expect(threadWokeAt(shell, { now: NOW })).toBeNull();
+    expect(effectiveSnoozed({ ...shell, snoozedUntil: null }, { now: NOW })).toBe(false);
+    expect(effectiveSnoozed({ ...shell, snoozedUntil: FUTURE_WAKE }, { now: NOW })).toBe(false);
+  }
+});

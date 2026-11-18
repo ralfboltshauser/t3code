@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import {
   useProfileProjects,
   useProfilesActive,
@@ -486,6 +487,11 @@ function useSidebarThreads(input: {
     false,
     Schema.Boolean,
   );
+  const [backlogShelfExpanded, setBacklogShelfExpanded] = useLocalStorage(
+    "t3code:sidebar:backlog-expanded",
+    false,
+    Schema.Boolean,
+  );
   const [workingShelfExpanded, setWorkingShelfExpanded] = useLocalStorage(
     WORKING_SHELF_EXPANDED_KEY,
     false,
@@ -544,9 +550,18 @@ function useSidebarThreads(input: {
   const renderedSettledThreads = settledShelfExpanded
     ? visibleSettledThreads
     : routeThreadOnly(visibleSettledThreads, routeRowThreadKey);
+  const backlogThreads = snoozedThreads.filter(
+    (thread) => thread.snoozedUntil === BACKLOG_SNOOZED_UNTIL,
+  );
+  const timedSnoozedThreads = snoozedThreads.filter(
+    (thread) => thread.snoozedUntil !== BACKLOG_SNOOZED_UNTIL,
+  );
   const visibleSnoozedThreads = snoozedShelfExpanded
-    ? snoozedThreads
-    : routeThreadOnly(snoozedThreads, routeRowThreadKey);
+    ? timedSnoozedThreads
+    : routeThreadOnly(timedSnoozedThreads, routeRowThreadKey);
+  const visibleBacklogThreads = backlogShelfExpanded
+    ? backlogThreads
+    : routeThreadOnly(backlogThreads, routeRowThreadKey);
   const visibleWorkingThreads = workingShelfExpanded
     ? workingThreads
     : routeThreadOnly(workingThreads, routeRowThreadKey);
@@ -611,6 +626,7 @@ function useSidebarThreads(input: {
           ...folder.readThreads,
         ])),
     ...visibleSnoozedThreads,
+    ...visibleBacklogThreads,
     ...renderedSettledThreads,
   ];
   const sectionByThreadKey = new Map<string, SidebarSection>();
@@ -645,6 +661,11 @@ function useSidebarThreads(input: {
       })),
     settledShelfExpanded,
     toggleSettledShelf: () => setSettledShelfExpanded((value) => !value),
+    backlogThreads,
+    timedSnoozedThreads,
+    visibleBacklogThreads,
+    backlogShelfExpanded,
+    toggleBacklogShelf: () => setBacklogShelfExpanded((value) => !value),
     snoozedShelfExpanded,
     toggleSnoozedShelf: () => setSnoozedShelfExpanded((value) => !value),
     workingShelfExpanded,
@@ -1424,6 +1445,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     toggleSettledShelf,
     snoozedShelfExpanded,
     toggleSnoozedShelf,
+    backlogThreads,
+    timedSnoozedThreads,
+    visibleBacklogThreads,
+    backlogShelfExpanded,
+    toggleBacklogShelf,
     workingShelfExpanded,
     toggleWorkingShelf,
     projectFolders,
@@ -2076,9 +2102,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       items.push({ kind: "marker", marker: "working-header" });
       items.push(...rowsOf(visibleWorkingThreads, "working"));
     }
-    if (snoozedThreads.length > 0) {
+    if (timedSnoozedThreads.length > 0) {
       items.push({ kind: "marker", marker: "snoozed-header" });
       items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
+    }
+    if (backlogThreads.length > 0) {
+      items.push({ kind: "marker", marker: "backlog-header" });
+      items.push(...rowsOf(visibleBacklogThreads, "snoozed"));
     }
     items.push({ kind: "marker", marker: "settled-header" });
     const settledRows = rowsOf(renderedSettledThreads, "settled");
@@ -2127,6 +2157,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const shelfExpansionKey = [
     workingShelfExpanded,
     snoozedShelfExpanded,
+    backlogShelfExpanded,
     settledShelfExpanded,
     projectFolders
       ?.map(
@@ -2478,6 +2509,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         disabled: !canOperateThreads(selectedThreads),
                       })),
                       {
+                        id: "snooze:backlog",
+                        label: "Indefinitely (Backlog)",
+                        disabled: !canOperateThreads(selectedThreads),
+                      },
+                      {
                         id: "snooze:custom",
                         label: "Custom…",
                         separatorBefore: snoozePresets.length > 0,
@@ -2526,14 +2562,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       if (clicked.value !== "mark-unread" && !checkThreadOperations(actionTargets)) return;
       if (clicked.value?.startsWith("snooze:")) {
         const preset =
-          clicked.value === "snooze:custom"
-            ? await requestCustomSnooze()
-            : pickSnoozePreset(
-                snoozePresets,
-                clicked.value.slice("snooze:".length),
-                timestampFormat,
-                selectedThreads[0]!.environmentId,
-              );
+          clicked.value === "snooze:backlog"
+            ? { snoozedUntil: BACKLOG_SNOOZED_UNTIL }
+            : clicked.value === "snooze:custom"
+              ? await requestCustomSnooze()
+              : pickSnoozePreset(
+                  snoozePresets,
+                  clicked.value.slice("snooze:".length),
+                  timestampFormat,
+                  selectedThreads[0]!.environmentId,
+                );
         if (preset) {
           const coSnoozingKeys = new Set(threadKeys);
           clearSelection();
@@ -3476,7 +3514,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               (section === "working" ||
                               section === "snoozed" ||
                               section === "settled"
-                                ? `shelf:${section}`
+                                ? `shelf:${thread.snoozedUntil === BACKLOG_SNOOZED_UNTIL ? "backlog" : section}`
                                 : undefined)
                             }
                             variantAction={
@@ -3728,10 +3766,29 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                     "mt-auto",
                                 )}
                                 label="Snoozed"
-                                count={snoozedThreads.length}
+                                count={timedSnoozedThreads.length}
                                 toggle={{
                                   expanded: snoozedShelfExpanded,
                                   onToggle: toggleSnoozedShelf,
+                                }}
+                              />,
+                            );
+                            break;
+                          case "backlog-header":
+                            items.push(
+                              <SidebarSectionHeader
+                                key="backlog-shelf-header"
+                                marker="backlog-header"
+                                className={cn(
+                                  (projectFolders !== null || workingThreads.length === 0) &&
+                                    timedSnoozedThreads.length === 0 &&
+                                    "mt-auto",
+                                )}
+                                label="Backlog"
+                                count={backlogThreads.length}
+                                toggle={{
+                                  expanded: backlogShelfExpanded,
+                                  onToggle: toggleBacklogShelf,
                                 }}
                               />,
                             );

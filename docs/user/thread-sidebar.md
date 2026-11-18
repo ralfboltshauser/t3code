@@ -342,6 +342,21 @@ its agent wakes itself for background work. It comes back early for an approval,
 a new question, a failed run, or a message or answer you send. You can snooze an existing
 question and answer when the thread wakes; the question stays unanswered.
 
+## Keep unfinished work in Backlog
+
+Choose **Snooze → Indefinitely (Backlog)** when a thread is waiting on customer
+feedback or another task with no return date. On web and desktop, it moves to the
+**Backlog** shelf. On mobile, it stays in **Snoozed** with a Backlog label.
+
+Backlog has no automatic wake. New questions, failures, messages and background
+activity leave the thread parked. Open it to read the conversation without
+restoring it, then choose **Restore** or **Restore from backlog** when you want it
+back in your active work. On web and desktop, dragging it into Active or Pinned
+also restores it. Parking does not stop an agent already working in the thread.
+
+Use updated fork clients and servers together; older versions treat Backlog as a
+far-future snooze and can still wake it automatically.
+
 ## Sidebar profiles (Labs)
 
 Enable **Settings → Labs → Sidebar profiles** to separate Work, Personal, and other

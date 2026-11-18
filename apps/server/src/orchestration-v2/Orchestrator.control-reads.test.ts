@@ -2158,3 +2158,42 @@ it.effect("a user message dispatched first stays run 1 when its lineage read is 
     );
   }).pipe(Effect.provide(layerGatedLineageRead));
 });
+
+it.effect("backlog survives time and messages until an explicit restore", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const { threadId } = yield* completeAndSnoozeThread("backlog", 60);
+    const deadline = "9999-12-31T23:59:59.999Z";
+    yield* orchestrator.dispatch({
+      type: "thread.snooze",
+      commandId: CommandId.make("park-backlog"),
+      threadId,
+      snoozedUntil: deadline,
+    });
+    yield* TestClock.adjust("30 days");
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("message-in-backlog"),
+      threadId,
+      messageId: MessageId.make("message-in-backlog"),
+      text: "Customer feedback",
+      attachments: [],
+      dispatchMode: { type: "defer_start" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    assert.equal(
+      DateTime.formatIso((yield* projections.getThread(threadId)).snoozedUntil!),
+      deadline,
+    );
+    yield* orchestrator.dispatch({
+      type: "thread.unsnooze",
+      commandId: CommandId.make("restore-backlog"),
+      threadId,
+      reason: "user",
+    });
+    assert.isNull((yield* projections.getThread(threadId)).snoozedUntil);
+    assert.isNull((yield* projections.getThreadShell(threadId))?.snoozedUntil);
+  }).pipe(Effect.provide(layerTest)),
+);

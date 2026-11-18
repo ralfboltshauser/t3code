@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
@@ -143,6 +144,7 @@ export function useSnoozeWakeClock(
   const wakeTimes: number[] = [];
   let nextWakeAt: number | null = null;
   for (const thread of threads) {
+    if (thread.snoozedUntil === BACKLOG_SNOOZED_UNTIL) continue;
     const wakeAt = thread.snoozedUntil == null ? Number.NaN : Date.parse(thread.snoozedUntil);
     if (!(wakeAt > clockMs)) continue;
     wakeTimes.push(wakeAt);
@@ -209,6 +211,7 @@ export type SidebarListMarker =
   | "settled-placeholder"
   | "pinned-divider"
   | "working-header"
+  | "backlog-header"
   | "snoozed-header"
   | "settled-header";
 
@@ -231,7 +234,8 @@ function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number):
     if (item.kind !== "marker") continue;
     if (item.marker === "pinned-divider") section = "active";
     else if (item.marker === "working-header") section = "working";
-    else if (item.marker === "snoozed-header") section = "snoozed";
+    else if (item.marker === "snoozed-header" || item.marker === "backlog-header")
+      section = "snoozed";
     else if (item.marker === "settled-header") section = "settled";
   }
   return section;
@@ -263,6 +267,7 @@ export function resolveSidebarDropTarget(
       if (item.marker === "pinned-divider") currentSection = "active";
       else if (
         item.marker === "working-header" ||
+        item.marker === "backlog-header" ||
         item.marker === "snoozed-header" ||
         item.marker === "settled-header"
       )

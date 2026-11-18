@@ -2034,3 +2034,16 @@ describe("isSnoozed", () => {
     ).toBeNull();
   });
 });
+
+it("does not wake or auto-settle backlog on new failures or guest messages", () => {
+  const parked = shell({
+    snoozedUntil: DateTime.makeUnsafe("9999-12-31T23:59:59.999Z"),
+    snoozedAt: at(-60 * 60 * 1_000),
+    status: "failed",
+    latestRunCompletedAt: at(-1_000),
+    pendingGuestMessageCount: 1,
+  });
+  expect(ThreadSettlementService.isSnoozed(parked, NOW_MS)).toBe(true);
+  expect(ThreadSettlementService.isAutoSettlementCandidate(parked, NOW_MS)).toBe(false);
+  expect(ThreadSettlementService.isSnoozed({ ...parked, snoozedUntil: null }, NOW_MS)).toBe(false);
+});

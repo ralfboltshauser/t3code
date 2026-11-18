@@ -307,6 +307,37 @@ Record each customization here with its intended behavior, owning paths, and a
 focused verification command. Record intentional removals too, so an update
 cannot silently restore them.
 
+Sidebar Backlog parks unfinished work until explicit restoration, without timed
+snooze's early wakes for requests, failures or messages. Web/desktop Snooze menus
+(including bulk selection) offer Indefinitely (Backlog), with a separate collapsible
+shelf, active-route visibility, keyboard parent recovery, Undo and drag-out restore.
+Native mobile uses its existing Snoozed shelf with Backlog labels and restore
+controls. MCP `t3_thread_organize` accepts `backlog`, reversed by `unsnooze`.
+Providers share this policy; parking leaves existing background work running.
+
+The reserved `BACKLOG_SNOOZED_UNTIL` timestamp in contracts reuses the persisted
+snooze field and existing guarded commands, projections, remote forwarding and
+handoff snapshots. There is no schema migration. Preserve the special case in
+server `Orchestrator.ts` message/request/recovery transitions and
+`ThreadSettlementService.ts`, shared `threadSettled.ts`/`threadCommands.ts`, web
+Sidebar partition/markers, menus, lifecycle/usage-limit banners and Undo notices,
+and native thread-list/detail/recovery presentation. Do not restore automatic
+wakes or auto-settlement for parked work. Restoration preserves the
+previous active/pinned/settled placement. Older clients/servers can
+still apply timed-snooze early wakes; deploy updated clients and servers together.
+Rolling back does not corrupt the database, but loses the manual-only policy.
+
+Verify retained parking through time, failures, fresh questions/approvals and
+messages; manual restore and optimistic rejection rollback; separate shelves,
+route visibility, menus, Undo, drag and reconnect in an isolated client. Native
+verification should show Backlog in Snoozed and restore from its detail/menu.
+
+```sh
+vp test run packages/client-runtime/src/state/threadSnoozed.test.ts packages/client-runtime/src/state/threadCommands.test.ts apps/server/src/orchestration-v2/ThreadSettlementService.test.ts apps/server/src/orchestration-v2/Orchestrator.control-reads.test.ts apps/server/src/mcp/toolkits/core.test.ts apps/server/src/provider/AgentContextBudget.test.ts apps/mobile/src/features/threads/threadListV2.test.ts
+vp test run apps/web/src/components/Sidebar.backlog.browser.test.tsx apps/web/src/components/Sidebar.logic.browser.test.tsx
+pnpm --dir evals mcp-tool-use --case backlog-until-manual-restore --model gpt-6.1-sol --shell-model gpt-6.1-terra --samples 1 --out runs/backlog-preservation
+```
+
 ## Maintenance and installation
 
 Read [the operations guide](docs/operations/personal-fork.md) for explicit batched releases, daily upstream

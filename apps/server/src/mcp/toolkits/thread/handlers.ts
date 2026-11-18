@@ -1,4 +1,5 @@
 import {
+  BACKLOG_SNOOZED_UNTIL,
   type CommandId,
   type RuntimeRequestId,
   ThreadId,
@@ -343,6 +344,9 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       }
       let command: OrchestrationV2Command;
       switch (input.action) {
+        case "backlog":
+          command = { ...common, type: "thread.snooze", snoozedUntil: BACKLOG_SNOOZED_UNTIL };
+          break;
         case "snooze":
           if (input.snoozedUntil === undefined) {
             return yield* new OrchestratorMcpFailure({

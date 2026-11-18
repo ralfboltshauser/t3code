@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { Dispatch } from "react";
@@ -198,7 +199,11 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
   // A clock read in render would stay frozen in the compiler's cache, so the
   // snooze checks read a snapshot that moves when the wake time changes or passes.
   const snoozeClock = new Date(
-    useNowAfter(Date.parse(activeThreadShell?.snoozedUntil ?? "") || null),
+    useNowAfter(
+      activeThreadShell?.snoozedUntil === BACKLOG_SNOOZED_UNTIL
+        ? null
+        : Date.parse(activeThreadShell?.snoozedUntil ?? "") || null,
+    ),
   ).toISOString();
   const activeThreadSnoozed =
     activeThreadShell !== null &&
@@ -620,9 +625,21 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     limitRecoveryHoldsSnooze ? null : (
       <ThreadStatusLine
         icon={<AlarmClockIcon />}
-        label={snoozeWake && snoozeWake !== "now" ? `Snoozed, ${snoozeWake} left` : "Snoozed"}
+        label={
+          snoozedUntil === BACKLOG_SNOOZED_UNTIL
+            ? "In backlog until you restore it"
+            : snoozeWake && snoozeWake !== "now"
+              ? `Snoozed, ${snoozeWake} left`
+              : "Snoozed"
+        }
         clockMinute={nowMinute}
-        actionLabel={isUnsnoozing ? "Waking..." : "Wake now"}
+        actionLabel={
+          isUnsnoozing
+            ? "Restoring…"
+            : snoozedUntil === BACKLOG_SNOOZED_UNTIL
+              ? "Restore"
+              : "Wake now"
+        }
         actionDisabled={!canOperateThread || isUnsnoozing}
         onAction={() => void handleUnsnoozeActiveThreadStable()}
       />

@@ -13,7 +13,7 @@ import { primaryServerKeybindingsAtom } from "../state/server";
 import * as ThreadUndo from "@t3tools/client-runtime/state/thread-undo";
 
 type UndoOptions = {
-  action: "Settled" | "Snoozed" | "Unpinned" | "Archived" | "Discarded";
+  action: "Settled" | "Snoozed" | "Moved to backlog" | "Unpinned" | "Archived" | "Discarded";
   undo: () => Promise<AtomCommandResult<unknown, unknown>>;
   failureTitle: string;
   claim: ReturnType<typeof ThreadUndo.begin>;
@@ -31,6 +31,7 @@ export const useThreadUndoNotice = create<{ notice: UndoNotice | null }>(() => (
 const UNDONE_ACTION = {
   Settled: "settle",
   Snoozed: "snooze",
+  "Moved to backlog": "move to backlog",
   Unpinned: "unpin",
   Archived: "archive",
   Discarded: "discard",
@@ -42,7 +43,10 @@ function countLabel(action: UndoOptions["action"], count: number) {
 }
 
 function threadUndoNoticeSummary(notice: Pick<UndoNotice, "action" | "count">): string {
-  return `${notice.action} ${countLabel(notice.action, notice.count)}`;
+  const count = countLabel(notice.action, notice.count);
+  return notice.action === "Moved to backlog"
+    ? `Moved ${count} to backlog`
+    : `${notice.action} ${count}`;
 }
 
 export function threadUndoLabel(keybindings: Parameters<typeof shortcutLabelForCommand>[0]) {

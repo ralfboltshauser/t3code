@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import { ChildThreadApprovals } from "./ChildThreadApprovals";
 import { useOpenThreadInspector } from "./thread-inspector-navigation";
 import { useSidebarWorkspaceTabs } from "../layout/workspace/useSystemWorkspaceTabBar";
@@ -359,7 +360,7 @@ const wakeAwareVisitShell = Atom.family((key: string) => {
     const nowMs = Date.now();
     const wokeAt = threadWokeAt(shell, { now: new Date(nowMs).toISOString() });
     const wakeAtMs = shell.snoozedUntil == null ? NaN : Date.parse(shell.snoozedUntil);
-    if (wokeAt === null && wakeAtMs > nowMs) {
+    if (shell.snoozedUntil !== BACKLOG_SNOOZED_UNTIL && wokeAt === null && wakeAtMs > nowMs) {
       const timer = setTimeout(
         () => get.refreshSelf(),
         Math.min(wakeAtMs - nowMs + 50, 2_147_483_647),
@@ -660,7 +661,7 @@ function ThreadDetailBody(
   const snoozedUntil = props.selectedThread.snoozedUntil;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- arms a timer that refreshes the lifecycle clock when the thread's snooze expires
   useEffect(() => {
-    if (!snoozed || snoozedUntil === null) return;
+    if (!snoozed || snoozedUntil === null || snoozedUntil === BACKLOG_SNOOZED_UNTIL) return;
     const timer = setTimeout(
       () => setLifecycleNow(new Date().toISOString()),
       Math.min(Math.max(0, Date.parse(snoozedUntil) - Date.now()) + 50, 2_147_483_647),
@@ -859,11 +860,19 @@ function ThreadDetailBody(
       const state = lifecycleSnoozed ? "snoozed" : settled ? "settled" : "woke";
       const label =
         lifecycleSnoozed && snoozedUntil !== null
-          ? `Snoozed, wakes in ${snoozeWakeLabel(snoozedUntil, { now: lifecycleNow })}`
+          ? snoozedUntil === BACKLOG_SNOOZED_UNTIL
+            ? "In backlog until you restore it"
+            : `Snoozed, wakes in ${snoozeWakeLabel(snoozedUntil, { now: lifecycleNow })}`
           : settled
             ? "Settled"
             : "Woke from snooze";
-      const actionLabel = lifecycleSnoozed ? "Wake now" : settled ? "Un-settle" : "Dismiss";
+      const actionLabel = lifecycleSnoozed
+        ? snoozedUntil === BACKLOG_SNOOZED_UNTIL
+          ? "Restore"
+          : "Wake now"
+        : settled
+          ? "Un-settle"
+          : "Dismiss";
       return {
         kind: "lifecycle",
         state,

@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import {
   type OrchestrationV2LimitRecovery,
   type OrchestrationV2LimitRecoveryUpdate,
@@ -60,9 +61,12 @@ export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBann
     resumes && resetAt && snoozedUntil && Date.parse(snoozedUntil) > Date.parse(resetAt)
       ? snoozedUntil
       : resetAt;
-  const resetDescription = displayAt
-    ? `${resumes ? "Resumes" : "Resets"} ${formatUpcomingTimestamp(displayAt, timestampFormat)}`
-    : "Reset time unavailable; retry manually";
+  const resetDescription =
+    snoozedUntil === BACKLOG_SNOOZED_UNTIL
+      ? "Auto-resume paused while in backlog"
+      : displayAt
+        ? `${resumes ? "Resumes" : "Resets"} ${formatUpcomingTimestamp(displayAt, timestampFormat)}`
+        : "Reset time unavailable; retry manually";
   if (!chatGptLimit) {
     return {
       id: `usage-limit-recovery:${runId}`,

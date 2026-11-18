@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import {
   canSnooze,
   effectiveSnoozed,
@@ -739,6 +740,7 @@ export function buildThreadListV2Items(input: {
       snoozed.push(thread);
       if (
         thread.snoozedUntil != null &&
+        thread.snoozedUntil !== BACKLOG_SNOOZED_UNTIL &&
         (nextSnoozeWakeAt === null ||
           parseTimestampMs(thread.snoozedUntil) < parseTimestampMs(nextSnoozeWakeAt))
       ) {

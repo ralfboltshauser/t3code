@@ -81,6 +81,7 @@ export interface ThreadActionMenuState {
   readonly isSettled: boolean;
   readonly autoSettleEnabled: boolean;
   readonly isSnoozed: boolean;
+  readonly isBacklogged?: boolean;
   readonly canSnoozeNow: boolean;
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects attached providers, so disable it while running. */
@@ -158,7 +159,11 @@ export function buildThreadActionMenuItems(
     ...(state.supports.snooze
       ? [
           state.isSnoozed
-            ? { id: "unsnooze" as const, label: "Wake thread", icon: "clock" }
+            ? {
+                id: "unsnooze" as const,
+                label: state.isBacklogged ? "Restore from backlog" : "Wake thread",
+                icon: "clock",
+              }
             : {
                 id: "snooze" as const,
                 label: "Snooze",
@@ -170,6 +175,7 @@ export function buildThreadActionMenuItems(
                     label: preset.label,
                     detail: preset.whenLabel,
                   })),
+                  { id: "snooze:backlog" as const, label: "Indefinitely (Backlog)" },
                   {
                     id: "snooze:custom" as const,
                     label: "Custom…",

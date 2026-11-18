@@ -5,6 +5,7 @@ import {
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import {
+  BACKLOG_SNOOZED_UNTIL,
   CommandId,
   isOrchestrationV2WorkActive,
   type ThreadId,
@@ -173,6 +174,11 @@ export function isSnoozed(
   >,
   nowMs: number,
 ): boolean {
+  if (
+    thread.snoozedUntil != null &&
+    DateTime.formatIso(thread.snoozedUntil) === BACKLOG_SNOOZED_UNTIL
+  )
+    return true;
   const snoozedUntilMs = toMillis(thread.snoozedUntil);
   if (snoozedUntilMs === null || snoozedUntilMs <= nowMs) return false;
   // Same as the client: a waiting guest message wakes the thread, and the snooze stays stored.

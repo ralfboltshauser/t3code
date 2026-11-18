@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -936,7 +937,7 @@ export function useThreadActions() {
       return result;
     }
     showThreadUndoNotice({
-      action: "Snoozed",
+      action: snoozedUntil === BACKLOG_SNOOZED_UNTIL ? "Moved to backlog" : "Snoozed",
       claim: action,
       undo: () => runUndoPlan(target, ThreadUndo.planThreadUndo("snooze")),
       failureTitle: "Failed to wake thread",

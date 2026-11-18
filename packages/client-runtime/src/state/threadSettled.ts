@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 // @effect-diagnostics globalDate:off -- UI snooze presets use local calendar boundaries and Intl labels.
 import * as DateTime from "effect/DateTime";
 import { DEFAULT_SNOOZE_PRESETS, type SnoozePresetSetting } from "@t3tools/contracts/settings";
@@ -93,6 +94,7 @@ function pendingQuestionAt(shell: ThreadSnoozeShell): string | null {
  * until its timer.
  */
 export function threadRaisedHandWhileSnoozed(shell: ThreadSnoozeShell): boolean {
+  if (shell.snoozedUntil === BACKLOG_SNOOZED_UNTIL) return false;
   const request = shell.source?.pendingRuntimeRequest;
   if (shell.hasPendingApprovals || (request != null && request.kind !== "user_input")) return true;
   const questionAt = pendingQuestionAt(shell);
@@ -158,6 +160,7 @@ export function effectiveSnoozed(
   shell: ThreadSnoozeShell,
   options: { readonly now: string },
 ): boolean {
+  if (shell.snoozedUntil === BACKLOG_SNOOZED_UNTIL) return true;
   if (shell.snoozedUntil == null) return false;
   const wakeAtMs = Date.parse(shell.snoozedUntil);
   if (Number.isNaN(wakeAtMs)) return false;
@@ -169,6 +172,7 @@ export function threadWokeAt(
   shell: ThreadSnoozeShell,
   options: { readonly now: string },
 ): string | null {
+  if (shell.snoozedUntil === BACKLOG_SNOOZED_UNTIL) return null;
   if (shell.snoozedUntil == null) return null;
   const wakeAtMs = Date.parse(shell.snoozedUntil);
   if (Number.isNaN(wakeAtMs)) return null;
@@ -349,6 +353,7 @@ export function pickSnoozePreset(input: {
 }
 
 export function snoozeWakeLabel(snoozedUntil: string, options: { readonly now: string }): string {
+  if (snoozedUntil === BACKLOG_SNOOZED_UNTIL) return "Backlog";
   const wakeMs = Date.parse(snoozedUntil);
   const nowMs = Date.parse(options.now);
   if (Number.isNaN(wakeMs) || Number.isNaN(nowMs)) return "now";

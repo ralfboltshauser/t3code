@@ -4538,3 +4538,6 @@ export const ProviderReplayNdjsonRecord = Schema.Union([
   ProviderReplayEntry,
 ]);
 export type ProviderReplayNdjsonRecord = typeof ProviderReplayNdjsonRecord.Type;
+
+// Backlog reuses persisted snooze state without introducing a database or wire migration.
+export const BACKLOG_SNOOZED_UNTIL = "9999-12-31T23:59:59.999Z";

@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -59,12 +60,15 @@ export function UsageLimitRecoveryCard({
     !runId
   )
     return null;
-  const resetText = displayAt
-    ? `${canSchedule && scheduled ? "Resumes" : "Resets"} ${new Date(displayAt).toLocaleString(
-        undefined,
-        { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
-      )}.`
-    : null;
+  const resetText =
+    thread.snoozedUntil === BACKLOG_SNOOZED_UNTIL
+      ? "Auto-resume paused while in backlog"
+      : displayAt
+        ? `${canSchedule && scheduled ? "Resumes" : "Resets"} ${new Date(displayAt).toLocaleString(
+            undefined,
+            { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
+          )}.`
+        : null;
   const snoozed =
     limitRecoveryOwnsSnooze({
       runId,

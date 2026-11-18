@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import type {
   OrchestrationV2ThreadLinkMetadata,
@@ -4412,6 +4413,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
             ...(command.limitRecovery !== undefined &&
             limitRecovery?.snooze === true &&
+            (thread.snoozedUntil == null ||
+              DateTime.formatIso(thread.snoozedUntil) !== BACKLOG_SNOOZED_UNTIL) &&
             Date.parse(limitRecovery.resetAt) > DateTime.toEpochMillis(now)
               ? {
                   snoozedUntil: DateTime.makeUnsafe(limitRecovery.resetAt),
@@ -6492,10 +6495,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       projection = applyToProjection(projection, event);
     }
     // Background wakes and delegated completions continue work the user already snoozed, so
-    // only a message someone actually sent ends the snooze.
+    // only a message someone actually sent ends a timed snooze.
     const automaticWake =
       command.notification !== undefined || command.delegatedCompletion !== undefined;
-    if (projection.thread.snoozedUntil != null && !automaticWake) {
+    if (
+      projection.thread.snoozedUntil != null &&
+      DateTime.formatIso(projection.thread.snoozedUntil) !== BACKLOG_SNOOZED_UNTIL &&
+      !automaticWake
+    ) {
       const now = yield* DateTime.now;
       const thread: OrchestrationV2AppThread = {
         ...projection.thread,
@@ -10024,7 +10031,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       if (
         !unchanged &&
         command.secretStatus === "saved" &&
-        projection.thread.snoozedUntil != null
+        projection.thread.snoozedUntil != null &&
+        DateTime.formatIso(projection.thread.snoozedUntil) !== BACKLOG_SNOOZED_UNTIL
       ) {
         yield* emit(
           events,
@@ -10163,7 +10171,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             updatedAt: now,
             type: "link_request",
           };
-      if (!unchanged && command.linkStatus === "linked" && projection.thread.snoozedUntil != null) {
+      if (
+        !unchanged &&
+        command.linkStatus === "linked" &&
+        projection.thread.snoozedUntil != null &&
+        DateTime.formatIso(projection.thread.snoozedUntil) !== BACKLOG_SNOOZED_UNTIL
+      ) {
         yield* emit(
           events,
           command,
@@ -10600,7 +10613,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         const thread = yield* projectionStore
           .getThread(command.threadId)
           .pipe(mapDispatchError(command));
-        if (thread.snoozedUntil != null) {
+        if (
+          thread.snoozedUntil != null &&
+          DateTime.formatIso(thread.snoozedUntil) !== BACKLOG_SNOOZED_UNTIL
+        ) {
           yield* emitEvent({
             type: "thread.unsnoozed",
             threadId: command.threadId,

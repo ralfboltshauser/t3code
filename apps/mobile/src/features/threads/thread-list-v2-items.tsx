@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
@@ -858,6 +859,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         title: preset.label,
         subtitle: preset.whenLabel,
       })),
+      { id: "snooze:backlog", title: "Indefinitely (Backlog)" },
       { id: "snooze:custom", title: "Custom…" },
     ],
     [snoozePresets],
@@ -958,7 +960,16 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     if (snoozedRow) {
       return layoutThreadListV2RowMenuActions({
         nested,
-        direct: [...direct, SNOOZED_MENU_ACTIONS[0]!],
+        direct: [
+          ...direct,
+          {
+            ...SNOOZED_MENU_ACTIONS[0]!,
+            title:
+              thread.snoozedUntil === BACKLOG_SNOOZED_UNTIL
+                ? "Restore from backlog"
+                : "Wake thread",
+          },
+        ],
         reorder: [],
         pin: [],
         secondary: [
@@ -1022,6 +1033,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     snoozedRow,
     swipeActions.secondary,
     thread.branch,
+    thread.snoozedUntil,
     titleMenuItems,
   ]);
   const handleMenuAction = useCallback(
@@ -1054,6 +1066,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         copyTextWithHaptic(thread.id, { target: "thread-id" });
       }
       if (nativeEvent.event === "delete") handleDelete();
+      if (nativeEvent.event === "snooze:backlog") {
+        handleSnooze(BACKLOG_SNOOZED_UNTIL);
+        return;
+      }
       if (nativeEvent.event === "snooze:custom") {
         setCustomSnoozeOpen(true);
         return;
@@ -1105,9 +1121,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     }
     if (swipeActions.primary === "unsnooze") {
       return {
-        accessibilityLabel: `Wake ${thread.title} now`,
+        accessibilityLabel:
+          thread.snoozedUntil === BACKLOG_SNOOZED_UNTIL
+            ? `Restore ${thread.title} from backlog`
+            : `Wake ${thread.title} now`,
         icon: "clock" as const,
-        label: "Wake",
+        label: thread.snoozedUntil === BACKLOG_SNOOZED_UNTIL ? "Restore" : "Wake",
         onPress: handleUnsnooze,
       };
     }
@@ -1130,6 +1149,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     handleUnsettle,
     handleUnsnooze,
     swipeActions.primary,
+    thread.snoozedUntil,
     thread.title,
   ]);
   const secondaryAction = useMemo(

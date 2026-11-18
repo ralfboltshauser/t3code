@@ -1,3 +1,4 @@
+import { BACKLOG_SNOOZED_UNTIL } from "@t3tools/contracts";
 import { useAtomMount } from "@effect/atom-react";
 import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
@@ -417,6 +418,14 @@ function SnoozeMenuButton(props: {
             <MenuItemDetail>{preset.whenLabel}</MenuItemDetail>
           </MenuItem>
         ))}
+        <MenuItem
+          onClick={(event) => {
+            event.stopPropagation();
+            onSnooze({ snoozedUntil: BACKLOG_SNOOZED_UNTIL });
+          }}
+        >
+          Indefinitely (Backlog)
+        </MenuItem>
         {presets.length > 0 ? <MenuSeparator /> : null}
         <MenuItem
           onClick={async (event) => {
@@ -1349,7 +1358,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     !props.snoozeSupported ? null : (
                       <button
                         type="button"
-                        aria-label="Wake thread now"
+                        aria-label={
+                          thread.snoozedUntil === BACKLOG_SNOOZED_UNTIL
+                            ? "Restore from backlog"
+                            : "Wake thread now"
+                        }
                         onClick={handleUnsnoozeClick}
                         onPointerDown={handleActionPointerDown}
                         className={cn(
