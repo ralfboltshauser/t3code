@@ -204,7 +204,18 @@ it.each(["[Docs](https://example.com/docs)", "[Readme](docs/readme.md)"])(
     using _setup = setup();
     await using screen = await renderMarkdown(text);
     screen.anchor().focus();
-    await userEvent.keyboard("{Shift>}{F10}{/Shift}");
+    // Chromium on macOS does not map Shift+F10 to a contextmenu event.
+    await act(() =>
+      screen
+        .anchor()
+        .dispatchEvent(
+          Object.defineProperty(
+            new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+            "button",
+            { value: -1 },
+          ),
+        ),
+    );
     await vi.waitFor(() => expect(state.choose.mock.lastCall?.[2]).toBe("keyboard"));
     await userEvent.click(screen.anchor(), { button: "right" });
     await vi.waitFor(() => expect(state.choose.mock.lastCall?.[2]).toBe("mouse"));

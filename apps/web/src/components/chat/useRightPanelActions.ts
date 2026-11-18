@@ -210,7 +210,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     if (surface.kind === "side-chat") {
       requestWorkspaceFocus({
         area: "panel",
-        selector: `[data-side-chat-pane="${CSS.escape(surface.threadId)}"] [data-workspace-area="composer"] [contenteditable="true"]`,
+        selector: `[data-side-chat-pane="${CSS.escape(surface.threadId)}"] [data-chat-composer-overlay] [contenteditable="true"]`,
       });
     }
     if (surface.kind === "diff" && !diffOpen) {

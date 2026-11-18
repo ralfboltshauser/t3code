@@ -53,6 +53,7 @@ it("shows the titled preview inside and outside search results from a collapsed 
   });
   const folder = page.getByRole("button", { name: /^render/ });
   await expect.element(folder).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("button", { name: /^Read in render/ }).click();
   // A removed row fades out as a clone without its test id, so match the live row only.
   const secondRow = page.getByTestId("sidebar-row-folder").filter({ hasText: second.title });
   await expect.element(secondRow).toBeInTheDocument();

@@ -1415,6 +1415,8 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
             args: [
               ...indexConfig,
               ...durableWrite,
+              // Git batch-fsync redirects bulk packs into a disposable store before publication.
+              ...(hostPlatform === "darwin" ? ["-c", "core.fsyncMethod=fsync"] : []),
               ...longPaths,
               // safecrlf=true refuses LF files under CRLF conversion; capture them as Git's default does.
               "-c",
