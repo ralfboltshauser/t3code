@@ -1,9 +1,12 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { ContextMenuSource } from "@t3tools/contracts";
 import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
+import { T, useGT, useMessages, Var } from "gt-react";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";
+import { contextMenuSourceOf } from "../../contextMenuSource";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useUiStateStore } from "../../uiStateStore";
 import { resolveSidebarFolderSummary, resolveThreadLastVisitedAt } from "../Sidebar.logic";
@@ -30,8 +33,14 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   threads: readonly EnvironmentThreadShell[];
   onToggle: (group: SidebarProjectSnapshot) => void;
   onNewThread: (group: SidebarProjectSnapshot) => void;
-  onContextMenu: (group: SidebarProjectSnapshot, position: { x: number; y: number }) => void;
+  onContextMenu: (
+    group: SidebarProjectSnapshot,
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const { group, collapsed, threads, hostPresentation } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
   const localLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
@@ -56,16 +65,22 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
               type="button"
               data-sidebar-row={rowId}
               aria-expanded={!collapsed}
-              aria-label={`${group.displayName}, ${sidebarProjectStatusLabel(summary)}`}
+              aria-label={`${group.displayName}, ${sidebarProjectStatusLabel(summary, messages)}`}
               aria-description={
                 hostPresentation.hosts.length > 0
-                  ? `On ${hostPresentation.hosts.map((host) => host.label).join(", ")}`
+                  ? gt("On {value0}", {
+                      value0: hostPresentation.hosts.map((host) => host.label).join(", "),
+                    })
                   : undefined
               }
               onClick={() => props.onToggle(group)}
               onContextMenu={(event) => {
                 event.preventDefault();
-                props.onContextMenu(group, { x: event.clientX, y: event.clientY });
+                props.onContextMenu(
+                  group,
+                  { x: event.clientX, y: event.clientY },
+                  contextMenuSourceOf(event),
+                );
               }}
               className="flex h-8 w-full cursor-pointer items-center gap-2.5 rounded-(--control-radius) px-(--sidebar-row-content-inset) text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
@@ -117,14 +132,18 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
                 data-sidebar-action-for={rowId}
                 size="icon-xs"
                 variant="ghost-muted"
-                aria-label={`New thread in ${group.displayName}`}
+                aria-label={gt("New thread in {project}", { project: group.displayName })}
                 onClick={() => props.onNewThread(group)}
               />
             }
           >
             <SquarePenIcon aria-hidden />
           </TooltipTrigger>
-          <TooltipPopup>New thread in {group.displayName}</TooltipPopup>
+          <TooltipPopup>
+            <T>
+              New thread in <Var>{group.displayName}</Var>
+            </T>
+          </TooltipPopup>
         </Tooltip>
       </span>
     </li>

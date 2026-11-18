@@ -52,6 +52,15 @@ function setup() {
   };
 }
 
+/** Mirrors MessagesTimeline's scroller, which takes focus so the keyboard scrolls it. */
+function conversationScroller(height: number) {
+  const timeline = document.createElement("div");
+  timeline.style.cssText = `height: ${height}px; overflow-y: auto`;
+  timeline.tabIndex = -1;
+  timeline.dataset.workspaceFocusDefault = "";
+  return timeline;
+}
+
 describe("workspace area focus", () => {
   it("focuses a side chat's composer instead of its Bring back toolbar", () => {
     using fixture = setup();
@@ -135,7 +144,7 @@ describe("workspace area focus", () => {
     const composer = fixture.area("composer", 2);
     sidebar.button.focus();
     fixture.controller.move(1);
-    // The conversation is a region; it takes focus itself rather than its first button.
+    // Without a timeline (an empty thread), the region takes focus rather than its first button.
     expect(document.activeElement).toBe(conversation.element);
     fixture.controller.move(1);
     expect(document.activeElement).toBe(composer.button);
@@ -145,6 +154,18 @@ describe("workspace area focus", () => {
     expect(document.activeElement).toBe(sidebar.button);
     fixture.controller.move(-1);
     expect(document.activeElement).toBe(panel.button);
+  });
+
+  it("moves back out of a side chat whose areas reuse the main chat's names", () => {
+    using fixture = setup();
+    const composer = fixture.area("composer", 2);
+    const panel = fixture.area("panel", 4);
+    const sideComposer = fixture.area("composer", 2, panel.element);
+    composer.button.focus();
+    fixture.controller.move(1);
+    expect(document.activeElement).toBe(sideComposer.button);
+    fixture.controller.move(-1);
+    expect(document.activeElement).toBe(composer.button);
   });
 
   it("skips hidden, inert, and maximized-away areas", () => {
@@ -304,8 +325,7 @@ describe("workspace area focus", () => {
       using fixture = setup();
       const side = embedded ? fixture.sideChat(fixture.area("panel", 4).element) : null;
       const conversation = side?.conversation ?? fixture.area("conversation", 1);
-      const timeline = document.createElement("div");
-      timeline.style.cssText = "height: 50px; overflow-y: auto";
+      const timeline = conversationScroller(50);
       const copy = document.createElement("button");
       copy.textContent = "Copy";
       timeline.append(
@@ -325,9 +345,27 @@ describe("workspace area focus", () => {
       if (remount) copy.replaceWith(copy.cloneNode(true));
       fixture.controller.move(-1);
       expect(timeline.scrollTop).toBe(300);
-      expect(document.activeElement).toBe(side?.editor ?? conversation.element);
+      expect(document.activeElement).toBe(side?.editor ?? timeline);
     },
   );
+
+  it("scrolls the conversation with the keyboard once an empty thread gets a timeline", async () => {
+    using fixture = setup();
+    const conversation = fixture.area("conversation", 1);
+    conversation.button.remove();
+    conversation.element.style.height = "200px";
+    const composer = fixture.area("composer", 2);
+    composer.button.focus();
+    fixture.controller.move(-1);
+    expect(document.activeElement).toBe(conversation.element);
+    fixture.controller.move(1);
+    const timeline = conversationScroller(200);
+    timeline.append(Object.assign(document.createElement("div"), { style: "height: 2000px" }));
+    conversation.element.append(timeline);
+    fixture.controller.move(-1);
+    await userEvent.keyboard("{ArrowDown}{PageDown}");
+    await vi.waitFor(() => expect(timeline.scrollTop).toBeGreaterThan(0));
+  });
 
   it.each([
     ["panel", "panel", "removed"],
@@ -392,6 +430,36 @@ describe("workspace area focus", () => {
       await vi.waitFor(() => expect(document.activeElement).toBe(target));
     },
   );
+  it("focuses a side chat's message input when the panel opens on it", () => {
+    using fixture = setup();
+    const panel = fixture.area("panel", 3);
+    const content = document.createElement("div");
+    content.setAttribute("data-right-panel-surface-content", "");
+    const bringBack = document.createElement("button");
+    bringBack.textContent = "Bring back";
+    content.append(bringBack);
+    panel.element.append(content);
+    const timeline = conversationScroller(50);
+    timeline.append(Object.assign(document.createElement("div"), { style: "height: 400px" }));
+    fixture.area("conversation", 1, content).element.append(timeline);
+    const composer = fixture.area("composer", 2, content);
+    const editor = document.createElement("div");
+    editor.contentEditable = "true";
+    composer.element.append(editor);
+    expect(fixture.controller.focus("panel")).toBe(true);
+    expect(document.activeElement).toBe(editor);
+    // F6 from the message input moves on to the panel's own controls.
+    expect(fixture.controller.move(1)).toBe(true);
+    expect(document.activeElement).toBe(bringBack);
+  });
+
+  it("waits for a requested area to mount", async () => {
+    using fixture = setup();
+    fixture.area("composer", 2);
+    fixture.controller.request({ area: "pull-requests" });
+    const list = fixture.area("pull-requests", 1);
+    await vi.waitFor(() => expect(document.activeElement).toBe(list.button));
+  });
 
   it("keeps focus on a control that React remounted elsewhere", async () => {
     using fixture = setup();

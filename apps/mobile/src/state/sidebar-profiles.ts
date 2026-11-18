@@ -1,3 +1,5 @@
+import { msg, useMessages } from "gt-react-native";
+import { m, type MessageResolver } from "../i18n/messages";
 import { useEffect } from "react";
 import { sidebarProfileForProject } from "@t3tools/client-runtime/sidebar-profiles";
 import { useAtomValue } from "@effect/atom-react";
@@ -32,16 +34,18 @@ export function readProfileDocument(raw?: string): SidebarProfilesDocument {
   return raw === undefined ? defaultSidebarProfiles() : validateSidebarProfiles(decode(raw));
 }
 export function useMobileSidebarProfiles() {
+  const messages = useMessages();
   const saved = useAtomValue(mobilePreferencesAtom);
   const confirmed = useAtomValue(sidebarProfilesDocumentAtom);
   const activeId = useAtomValue(activeSidebarProfileAtom);
   const raw = AsyncResult.isSuccess(saved) ? saved.value.sidebarProfiles : undefined;
-  return resolveMobileProfiles(raw, confirmed, activeId);
+  return resolveMobileProfiles(raw, confirmed, activeId, messages);
 }
 function resolveMobileProfiles(
   raw: string | undefined,
   confirmed: SidebarProfilesDocument | null,
   activeId: string,
+  resolve: MessageResolver = m,
 ) {
   try {
     const stored = readProfileDocument(raw);
@@ -51,7 +55,7 @@ function resolveMobileProfiles(
     return {
       document: defaultSidebarProfiles(),
       activeId,
-      error: cause instanceof Error ? cause.message : "Cannot read profiles.",
+      error: cause instanceof Error ? cause.message : resolve(msg("Cannot read profiles.")),
     };
   }
 }

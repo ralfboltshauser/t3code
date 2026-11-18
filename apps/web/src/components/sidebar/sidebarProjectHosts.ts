@@ -1,3 +1,5 @@
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 import type { ConnectionCatalogEntry } from "@t3tools/client-runtime/connection";
 import type { EnvironmentId, EnvironmentMachineKind } from "@t3tools/contracts";
 
@@ -16,16 +18,19 @@ function environmentAccent(environmentId: EnvironmentId) {
   return hostAccent(hue < 60 ? 190 + hue : 300 + hue - 60);
 }
 
-export function resolveSidebarProjectHosts(input: {
-  readonly members: ReadonlyArray<{
-    readonly environmentId: EnvironmentId;
-    readonly environmentLabel: string | null;
-  }>;
-  readonly primaryEnvironmentId: EnvironmentId | null;
-  readonly catalogReady: boolean;
-  readonly catalog: ReadonlyMap<EnvironmentId, Pick<ConnectionCatalogEntry, "target">>;
-  readonly machineByEnvironmentId: ReadonlyMap<EnvironmentId, EnvironmentMachineKind>;
-}) {
+export function resolveSidebarProjectHosts(
+  input: {
+    readonly members: ReadonlyArray<{
+      readonly environmentId: EnvironmentId;
+      readonly environmentLabel: string | null;
+    }>;
+    readonly primaryEnvironmentId: EnvironmentId | null;
+    readonly catalogReady: boolean;
+    readonly catalog: ReadonlyMap<EnvironmentId, Pick<ConnectionCatalogEntry, "target">>;
+    readonly machineByEnvironmentId: ReadonlyMap<EnvironmentId, EnvironmentMachineKind>;
+  },
+  resolve: MessageResolver = m,
+) {
   const hosts = [...new Map(input.members.map((member) => [member.environmentId, member])).values()]
     .map((member) => {
       const { environmentId } = member;
@@ -37,7 +42,9 @@ export function resolveSidebarProjectHosts(input: {
       return {
         environmentId,
         label:
-          target?.label || member.environmentLabel || `Environment ${environmentId.slice(0, 8)}`,
+          target?.label ||
+          member.environmentLabel ||
+          resolve(msg("Environment {value0}", { value0: environmentId.slice(0, 8) })),
         machine: input.machineByEnvironmentId.get(environmentId) ?? "server",
         color: neutral ? undefined : environmentAccent(environmentId),
       };

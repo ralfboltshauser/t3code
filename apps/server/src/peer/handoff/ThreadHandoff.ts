@@ -537,6 +537,7 @@ const make = Effect.gen(function* () {
             .releaseUnlessBusy({
               providerSessionId: session.id,
               ownProviderThreadIds: records.providerThreads.map((entry) => entry.id),
+              throughRunOrdinal: Math.max(0, ...records.runs.map((run) => run.ordinal)),
               reason: "manual_shutdown",
               detail: "This chat moved to another machine.",
             })

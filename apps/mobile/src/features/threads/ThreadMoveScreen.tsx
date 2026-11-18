@@ -1,3 +1,4 @@
+import { useGT, T, Var } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { incomingMoveRecoveryCommand } from "@t3tools/client-runtime/state/threadHandoff";
@@ -25,6 +26,7 @@ import { getComposerDraftSnapshot, setComposerDraftText } from "../../state/use-
 export function ThreadMoveScreen({
   route,
 }: StaticScreenProps<{ environmentId: EnvironmentId; threadId: ThreadId; draftKey: string }>) {
+  const gt = useGT();
   const { environmentId, threadId, draftKey } = route.params;
   const navigation = useNavigation();
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
@@ -112,7 +114,7 @@ export function ThreadMoveScreen({
           ? String(squashAtomCommandFailure(result))
           : result.value.state === "failed"
             ? result.value.lastError
-            : "Could not move this chat.",
+            : gt("Could not move this chat."),
       );
       locked.current = false;
       setPending(false);
@@ -123,20 +125,22 @@ export function ThreadMoveScreen({
   if (submitted)
     return (
       <View className="flex-1 bg-sheet-solid">
-        <SheetHeader title="Moving chat" onClose={() => navigation.goBack()} />
+        <SheetHeader title={gt("Moving chat")} onClose={() => navigation.goBack()} />
         <View className="gap-4 p-4">
           <ThreadMoveNotice environmentId={environmentId} threadId={threadId} />
-          <Text>You can close this view. The move continues on the server.</Text>
+          <Text>
+            <T>You can close this view. The move continues on the server.</T>
+          </Text>
         </View>
       </View>
     );
   return (
     <KeyboardAvoidingView behavior="padding" className="flex-1 bg-sheet-solid">
       <SheetHeader
-        title="Move chat"
+        title={gt("Move chat")}
         onCancel={() => navigation.goBack()}
         confirm={{
-          label: instruction.trim() ? "Move and send" : "Move",
+          label: instruction.trim() ? gt("Move and send") : gt("Move"),
           onPress: () => void submit(),
           disabled: !!blocked || !projectId || pending,
           loading: pending,
@@ -144,9 +148,11 @@ export function ThreadMoveScreen({
       />
       <ScreenContent>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-5 p-4 pb-10">
-          <Text>Continue this conversation on another machine.</Text>
+          <Text>
+            <T>Continue this conversation on another machine.</T>
+          </Text>
           <ListSection
-            title="Machine"
+            title={gt("Machine")}
             footer={
               query.isPending
                 ? "Checking available machines…"
@@ -170,7 +176,7 @@ export function ThreadMoveScreen({
             ))}
           </ListSection>
           {target && target.projects.length > 1 ? (
-            <ListSection title="Project">
+            <ListSection title={gt("Project")}>
               {target.projects.map((item, index) => (
                 <ListChoiceRow
                   key={item.id}
@@ -182,23 +188,29 @@ export function ThreadMoveScreen({
               ))}
             </ListSection>
           ) : target?.projects[0] ? (
-            <Text>Project: {target.projects[0].title}</Text>
+            <Text>
+              <T>
+                Project: <Var>{target.projects[0].title}</Var>
+              </T>
+            </Text>
           ) : null}
           <Text textRole="footnote" className="text-foreground-muted">
-            Moves recent conversation text and captured Git working files. Earlier history stays
-            here. Ignored untracked files, attachments, staging and running processes stay here.
-            Uses the destination’s worktree setup. New move worktrees are disposable: safely
-            captured checkouts are removed after a later move. Stop external writers; local-only
-            work keeps its source.
+            <T>
+              Moves recent conversation text and captured Git working files. Earlier history stays
+              here. Ignored untracked files, attachments, staging and running processes stay here.
+              Uses the destination’s worktree setup. New move worktrees are disposable: safely
+              captured checkouts are removed after a later move. Stop external writers; local-only
+              work keeps its source.
+            </T>
           </Text>
-          <ListSection title="Next instruction (optional)">
+          <ListSection title={gt("Next instruction (optional)")}>
             <View className="p-4">
               <AppTextInput
-                accessibilityLabel="Next instruction"
+                accessibilityLabel={gt("Next instruction")}
                 multiline
                 value={instruction}
                 onChangeText={setInstruction}
-                placeholder="Run the Linux tests and fix any failures"
+                placeholder={gt("Run the Linux tests and fix any failures")}
               />
             </View>
           </ListSection>
@@ -218,6 +230,7 @@ export function ThreadMoveNotice({
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
 }) {
+  const gt = useGT();
   const thread = useQuietThreadShell(scopeThreadRef(environmentId, threadId));
   const navigation = useNavigation();
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
@@ -230,15 +243,21 @@ export function ThreadMoveNotice({
         <Notice
           message={
             recovery
-              ? `Moved from ${thread.linkOrigin?.label ?? "another machine"}. Recent text and Git files arrived in a disposable worktree. The original incoming files are retained for recovery. Stop external writers before moving again.`
-              : `Moved from ${thread.linkOrigin?.label ?? "another machine"}. Recent text and Git files arrived in a new worktree. Earlier history and local-only resources remain on the source.`
+              ? gt(
+                  "Moved from {value0}. Recent text and Git files arrived in a disposable worktree. The original incoming files are retained for recovery. Stop external writers before moving again.",
+                  { value0: thread.linkOrigin?.label ?? "another machine" },
+                )
+              : gt(
+                  "Moved from {value0}. Recent text and Git files arrived in a new worktree. Earlier history and local-only resources remain on the source.",
+                  { value0: thread.linkOrigin?.label ?? "another machine" },
+                )
           }
         />
         {recovery ? (
           <Button
             tone="text"
             size="compact"
-            label="Copy recovery command"
+            label={gt("Copy recovery command")}
             onPress={() => void Clipboard.setStringAsync(recovery)}
           />
         ) : null}
@@ -250,18 +269,23 @@ export function ThreadMoveNotice({
       <Notice
         message={
           move.state === "departed"
-            ? `Moved to ${move.label}. This copy is read only. ${move.retirement?.reason ?? "Its source files were kept."}`
+            ? gt("Moved to {value0}. This copy is read only. {value1}", {
+                value0: move.label,
+                value1: move.retirement?.reason ?? "Its source files were kept.",
+              })
             : move.state === "failed"
               ? move.lastError
               : (move.lastError ??
-                `Moving to ${move.label}. Messages are paused until the destination confirms.`)
+                gt("Moving to {value0}. Messages are paused until the destination confirms.", {
+                  value0: move.label,
+                }))
         }
       />
       {move.state === "departed" && recovery ? (
         <Button
           tone="text"
           size="compact"
-          label="Copy recovery command"
+          label={gt("Copy recovery command")}
           onPress={() => void Clipboard.setStringAsync(recovery)}
         />
       ) : null}
@@ -271,11 +295,11 @@ export function ThreadMoveNotice({
         label={
           move.state === "departed"
             ? presentations.get(move.environmentId)?.connection.phase === "connected"
-              ? "Open chat"
-              : "Connect to open"
+              ? gt("Open chat")
+              : gt("Connect to open")
             : move.state === "departing"
-              ? "Check again"
-              : "Try again"
+              ? gt("Check again")
+              : gt("Try again")
         }
         onPress={() => {
           if (

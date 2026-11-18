@@ -54,3 +54,4 @@ node_modules/
 /.t3-fork/
 __pycache__/
 *.pyc
+/packages/ssh/.ssh-launcher-test-*/

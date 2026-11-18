@@ -1,3 +1,4 @@
+import { T, useGT, Var } from "gt-react";
 import type { EnvironmentId, ProjectId, ScopedThreadRef } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -35,6 +36,7 @@ export function ThreadMoveDialogHost() {
 }
 
 function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
+  const gt = useGT();
   const labelId = useId();
   const thread = useQuietThreadShell(source);
   const query = useEnvironmentQuery(
@@ -168,18 +170,28 @@ function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>Move chat</DialogTitle>
-            <DialogDescription>Continue this conversation on another machine.</DialogDescription>
+            <DialogTitle>
+              <T>Move chat</T>
+            </DialogTitle>
+            <DialogDescription>
+              <T>Continue this conversation on another machine.</T>
+            </DialogDescription>
           </DialogHeader>
           <DialogPanel>
             <div className="flex flex-col gap-4">
               {query.isPending ? (
-                <p role="status">Checking available machines…</p>
+                <p role="status">
+                  <T>Checking available machines…</T>
+                </p>
               ) : options.length === 0 ? (
-                <p>No linked machines. Link a machine in Settings → Connections first.</p>
+                <p>
+                  <T>No linked machines. Link a machine in Settings → Connections first.</T>
+                </p>
               ) : (
                 <div className="flex flex-col gap-1.5">
-                  <Label id={labelId}>Machine</Label>
+                  <Label id={labelId}>
+                    <T>Machine</T>
+                  </Label>
                   <Select
                     items={options.map((option) => ({
                       value: option.environmentId,
@@ -192,7 +204,7 @@ function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
                     }}
                   >
                     <SelectTrigger aria-labelledby={labelId}>
-                      <SelectValue placeholder="Choose a machine" />
+                      <SelectValue placeholder={gt("Choose a machine")} />
                     </SelectTrigger>
                     <SelectPopup>
                       {options.map((option) => (
@@ -214,16 +226,18 @@ function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
                       void navigate({ to: "/settings/connections" });
                     }}
                   >
-                    Connections
+                    <T>Connections</T>
                   </Button>
                   <Button type="button" variant="ghost" onClick={query.refresh}>
-                    Refresh
+                    <T>Refresh</T>
                   </Button>
                 </div>
               ) : null}
               {target && target.projects.length > 1 ? (
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`${labelId}-project`}>Project</Label>
+                  <Label htmlFor={`${labelId}-project`}>
+                    <T>Project</T>
+                  </Label>
                   <Select
                     items={target.projects.map((project) => ({
                       value: project.id,
@@ -233,7 +247,7 @@ function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
                     onValueChange={(value) => setPickedProject(value as ProjectId)}
                   >
                     <SelectTrigger id={`${labelId}-project`}>
-                      <SelectValue placeholder="Choose a project" />
+                      <SelectValue placeholder={gt("Choose a project")} />
                     </SelectTrigger>
                     <SelectPopup>
                       {target.projects.map((project) => (
@@ -245,24 +259,35 @@ function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
                   </Select>
                 </div>
               ) : target?.projects[0] ? (
-                <p className="text-sm text-muted-foreground">Project: {target.projects[0].title}</p>
+                <p className="text-sm text-muted-foreground">
+                  <T>
+                    Project: <Var>{target.projects[0].title}</Var>
+                  </T>
+                </p>
               ) : null}
               <p className="text-sm text-muted-foreground">
-                Moves recent conversation text and captured Git working files. Earlier history stays
-                here. Ignored untracked files, attachments, staging and running processes stay here.
-                Uses the destination’s worktree setup. New move worktrees are disposable: after a
-                later move, safely captured checkouts are removed immediately. Stop external
-                writers; sources with local-only work are kept with a reason.
+                <T>
+                  Moves recent conversation text and captured Git working files. Earlier history
+                  stays here. Ignored untracked files, attachments, staging and running processes
+                  stay here. Uses the destination’s worktree setup. New move worktrees are
+                  disposable: after a later move, safely captured checkouts are removed immediately.
+                  Stop external writers; sources with local-only work are kept with a reason.
+                </T>
               </p>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`${labelId}-instruction`}>
-                  Next instruction <span className="text-muted-foreground">(optional)</span>
+                  <T>
+                    Next instruction{" "}
+                    <span className="text-muted-foreground">
+                      <T>(optional)</T>
+                    </span>
+                  </T>
                 </Label>
                 <Textarea
                   id={`${labelId}-instruction`}
                   value={instruction}
                   onChange={(event) => setInstruction(event.target.value)}
-                  placeholder="Run the Linux tests and fix any failures"
+                  placeholder={gt("Run the Linux tests and fix any failures")}
                   onKeyDown={(event) => {
                     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                       event.preventDefault();
@@ -273,7 +298,9 @@ function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
               </div>
               {blocked || query.error || error ? (
                 <Alert variant="warning">
-                  <AlertTitle>Before moving</AlertTitle>
+                  <AlertTitle>
+                    <T>Before moving</T>
+                  </AlertTitle>
                   <AlertDescription>{error ?? query.error ?? blocked}</AlertDescription>
                 </Alert>
               ) : null}
@@ -281,14 +308,14 @@ function MoveDialog({ source }: { readonly source: ScopedThreadRef }) {
           </DialogPanel>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={closeThreadMove}>
-              Cancel
+              <T>Cancel</T>
             </Button>
             <Button
               type="submit"
               disabled={!target || !projectId || blocked !== null || submitting}
             >
               <ArrowRightLeftIcon />
-              {instruction.trim() ? "Move and send" : "Move chat"}
+              {instruction.trim() ? gt("Move and send") : gt("Move chat")}
             </Button>
           </DialogFooter>
         </form>

@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { mobileCreationProfile, assignMobileNewEnvironment } from "../../state/sidebar-profiles";
 import * as Dialog from "../../components/ui/Dialog";
 import { AsyncResult } from "effect/reactivity";
@@ -11,6 +12,8 @@ import type {
   RelayClientEnvironmentRecord,
   RelayEnvironmentStatusResponse,
 } from "@t3tools/contracts/relay";
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
+import { useMessages } from "gt-react-native";
 import * as Option from "effect/Option";
 import { useMemo } from "react";
 
@@ -33,6 +36,8 @@ export interface RelayEnvironmentView {
 }
 
 export function useConnectionController() {
+  const gt = useGT();
+  const messages = useMessages();
   const connectedEnvironments = useWorkspaceEnvironments();
   const discovery = useAtomValue(relayEnvironmentDiscovery.stateValueAtom);
   const connectPairingUrlMutation = useAtomCommand(connectPairingUrlAtom, {
@@ -41,7 +46,6 @@ export function useConnectionController() {
   const updateBearer = useAtomCommand(updateBearerConnection, { reportFailure: false });
   const registerEnvironment = useAtomCommand(environmentCatalog.register, "environment register");
   const removeEnvironmentMutation = useAtomCommand(environmentCatalog.remove, "environment remove");
-  const retryEnvironmentMutation = useAtomCommand(environmentCatalog.retryNow, "environment retry");
   const setEnvironmentEnabledMutation = useAtomCommand(
     environmentCatalog.setEnabled,
     "environment toggle",
@@ -61,10 +65,10 @@ export function useConnectionController() {
         environment: entry.environment,
         availability: entry.availability,
         status: Option.getOrNull(entry.status),
-        error: Option.getOrNull(entry.error)?.message ?? null,
+        error: errorDisplayMessage(Option.getOrNull(entry.error), messages),
         traceId: Option.getOrNull(entry.error)?.traceId ?? null,
       })),
-    [discovery.environments],
+    [discovery.environments, messages],
   );
   const availableRelayEnvironments = useMemo(
     () => relayEnvironments.filter((entry) => !registeredIds.has(entry.environment.environmentId)),
@@ -80,7 +84,7 @@ export function useConnectionController() {
     });
     if (AsyncResult.isSuccess(result) && !expectedEnvironmentId)
       await assignMobileNewEnvironment(result.value, known, profileId).catch(() =>
-        Dialog.alert("Environment connected", "Set its default in Manage profiles."),
+        Dialog.alert(gt("Environment connected"), gt("Set its default in Manage profiles.")),
       );
     return result;
   };
@@ -97,14 +101,12 @@ export function useConnectionController() {
     );
     if (AsyncResult.isSuccess(result))
       await assignMobileNewEnvironment(environment.environmentId, known, profileId).catch(() =>
-        Dialog.alert("Environment connected", "Set its default in Manage profiles."),
+        Dialog.alert(gt("Environment connected"), gt("Set its default in Manage profiles.")),
       );
     return result;
   };
   const removeEnvironment = (environmentId: EnvironmentId) =>
     removeEnvironmentMutation(environmentId);
-  const retryEnvironment = (environmentId: EnvironmentId) =>
-    retryEnvironmentMutation(environmentId);
   const setEnvironmentEnabled = (environmentId: EnvironmentId, enabled: boolean) =>
     setEnvironmentEnabledMutation({ environmentId, enabled });
   const updateEnvironment = (
@@ -124,13 +126,12 @@ export function useConnectionController() {
     relayDiscovery: {
       isRefreshing: discovery.refreshing,
       isOffline: discovery.offline,
-      error: Option.getOrNull(discovery.error)?.message ?? null,
+      error: errorDisplayMessage(Option.getOrNull(discovery.error), messages),
       errorTraceId: Option.getOrNull(discovery.error)?.traceId ?? null,
     },
     connectPairingUrl,
     connectRelayEnvironment,
     removeEnvironment,
-    retryEnvironment,
     setEnvironmentEnabled,
     updateEnvironment,
     refreshRelayEnvironments,

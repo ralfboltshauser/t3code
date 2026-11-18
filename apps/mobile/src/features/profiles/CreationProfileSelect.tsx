@@ -1,8 +1,10 @@
+import { useGT } from "gt-react-native";
 import { Menu } from "../../components/ui/Menu";
 import { Button } from "../../components/ui/Button";
 import { useMobileSidebarProfiles, selectMobileSidebarProfile } from "../../state/sidebar-profiles";
 
 export function CreationProfileSelect() {
+  const gt = useGT();
   const { document, activeId } = useMobileSidebarProfiles();
   if (!document.enabled) return null;
   const profile =
@@ -14,8 +16,8 @@ export function CreationProfileSelect() {
       onPressAction={({ nativeEvent }) => selectMobileSidebarProfile(nativeEvent.event)}
     >
       <Button
-        label={`Profile: ${profile?.name ?? "General"}`}
-        accessibilityLabel="Profile for new work"
+        label={gt("Profile: {value0}", { value0: profile?.name ?? "General" })}
+        accessibilityLabel={gt("Profile for new work")}
         onPress={() => {}}
       />
     </Menu>

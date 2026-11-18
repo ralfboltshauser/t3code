@@ -1,15 +1,17 @@
+import { msg, useMessages } from "gt-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 import type { ReactNode } from "react";
 
 import type { resolveSidebarFolderSummary } from "../Sidebar.logic";
 
 const SEGMENTS = [
-  { key: "attention", label: "Needs attention", color: "stroke-warning", dot: "bg-warning" },
-  { key: "failed", label: "Failed", color: "stroke-error", dot: "bg-error" },
-  { key: "unread", label: "Unread results", color: "stroke-success", dot: "bg-success" },
-  { key: "working", label: "Working", color: "stroke-info", dot: "bg-info" },
+  { key: "attention", label: msg("Needs attention"), color: "stroke-warning", dot: "bg-warning" },
+  { key: "failed", label: msg("Failed"), color: "stroke-error", dot: "bg-error" },
+  { key: "unread", label: msg("Unread results"), color: "stroke-success", dot: "bg-success" },
+  { key: "working", label: msg("Working"), color: "stroke-info", dot: "bg-info" },
   {
     key: "quiet",
-    label: "Read or idle",
+    label: msg("Read or idle"),
     color: "stroke-sidebar-muted-foreground/50",
     dot: "bg-sidebar-muted-foreground/50",
   },
@@ -26,16 +28,23 @@ function point(angle: number) {
   return `${7 + RADIUS * Math.cos(radians)} ${7 + RADIUS * Math.sin(radians)}`;
 }
 
-export function sidebarProjectStatusLabel(summary: Summary) {
-  if (summary.total === 0) return "0 chats";
-  return `${summary.total} ${summary.total === 1 ? "chat" : "chats"}: ${SEGMENTS.filter(
-    ({ key }) => summary[key] > 0,
-  )
-    .map(
-      ({ key, label }) =>
-        `${summary[key]} ${key === "unread" && summary[key] === 1 ? "unread result" : label.toLowerCase()}`,
-    )
-    .join(", ")}`;
+const COUNT_LABELS = {
+  attention: msg("{count} needs attention"),
+  failed: msg("{count} failed"),
+  unread: msg("{count, plural, one {{count} unread result} other {{count} unread results}}"),
+  working: msg("{count} working"),
+  quiet: msg("{count} read or idle"),
+};
+
+const CHAT_COUNT = msg("{count, plural, one {{count} chat} other {{count} chats}}");
+
+export function sidebarProjectStatusLabel(summary: Summary, resolve: MessageResolver = m) {
+  const total = resolve(CHAT_COUNT, { count: summary.total });
+  if (summary.total === 0) return total;
+  const statuses = SEGMENTS.filter(({ key }) => summary[key] > 0)
+    .map(({ key }) => resolve(COUNT_LABELS[key], { count: summary[key] }))
+    .join(", ");
+  return resolve(msg("{total}: {statuses}", { total, statuses }));
 }
 
 export function SidebarProjectStatus({ summary }: { summary: Summary }) {
@@ -88,15 +97,14 @@ export function SidebarProjectStatusBreakdown({
   summary: Summary;
   heading?: ReactNode;
 }) {
+  const m = useMessages();
   return (
     <div className="grid gap-1 py-0.5">
-      <span className="font-medium">
-        {heading ?? `${summary.total} ${summary.total === 1 ? "chat" : "chats"}`}
-      </span>
+      <span className="font-medium">{heading ?? m(CHAT_COUNT, { count: summary.total })}</span>
       {SEGMENTS.filter(({ key }) => summary[key] > 0).map(({ key, label, dot }) => (
         <span key={key} className="flex items-center gap-2">
           <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
-          <span className="flex-1">{label}</span>
+          <span className="flex-1">{m(label)}</span>
           <span className="tabular-nums">{summary[key]}</span>
         </span>
       ))}

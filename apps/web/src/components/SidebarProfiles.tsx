@@ -1,3 +1,4 @@
+import { useGT, T, Var } from "gt-react";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -89,9 +90,10 @@ export function ProfileSelect({
   excludeProfileId?: string;
   id?: string;
 }) {
+  const gt = useGT();
   const profiles = useSidebarProfiles((s) => s.document.profiles);
   const items = [
-    ...(inherit ? [{ value: "inherit", label: "Use environment default" }] : []),
+    ...(inherit ? [{ value: "inherit", label: gt("Use environment default") }] : []),
     ...profiles
       .filter((p) => p.id !== excludeProfileId)
       .map((p) => ({ value: p.id, label: `${p.icon} ${p.name}` })),
@@ -121,6 +123,7 @@ export function ProfileSelect({
   );
 }
 export function SidebarProfileRail() {
+  const gt = useGT();
   const active = useProfilesActive();
   const document = useSidebarProfiles((s) => s.document);
   const activeId = useSidebarProfiles((s) => s.activeId);
@@ -132,7 +135,9 @@ export function SidebarProfileRail() {
   return (
     <div className="px-2 pt-1 pb-1">
       <Menu>
-        <MenuTrigger render={<SidebarMenuButton aria-label={`Switch profile: ${name}`} />}>
+        <MenuTrigger
+          render={<SidebarMenuButton aria-label={gt("Switch profile: {name}", { name: name })} />}
+        >
           {profile ? (
             <span aria-hidden className="flex size-4 shrink-0 items-center justify-center text-sm">
               {profile.icon}
@@ -166,13 +171,15 @@ export function SidebarProfileRail() {
             onClick={() => void switchProfile(ALL_PROFILES_ID)}
           >
             <LayersIcon aria-hidden />
-            <span className="min-w-0 flex-1">All profiles</span>
+            <span className="min-w-0 flex-1">
+              <T>All profiles</T>
+            </span>
             {activeId === ALL_PROFILES_ID ? <CheckIcon aria-hidden /> : null}
           </MenuItem>
           <MenuSeparator />
           <MenuItem onClick={() => openProfileManager()}>
             <Settings2Icon aria-hidden />
-            Manage profiles…
+            <T>Manage profiles…</T>
           </MenuItem>
         </MenuPopup>
       </Menu>
@@ -185,6 +192,7 @@ export function SidebarProfileRail() {
   );
 }
 export function SidebarProfileLanding() {
+  const gt = useGT();
   const projects = useProfileProjects();
   const profile = useSidebarProfiles((s) => s.document.profiles.find((p) => p.id === s.activeId));
   const handleNewThread = useNewThreadHandler();
@@ -193,12 +201,12 @@ export function SidebarProfileLanding() {
     <SidebarInset className="h-dvh">
       <div className="m-auto flex max-w-md flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold">
-          {profile ? `${profile.icon} ${profile.name}` : "All profiles"}
+          {profile ? `${profile.icon} ${profile.name}` : gt("All profiles")}
         </h1>
         <p className="text-sm text-muted-foreground">
           {projects.length
-            ? "Choose a project to start a thread, or open an existing thread in the sidebar."
-            : "Add a project or move existing projects into this profile."}
+            ? gt("Choose a project to start a thread, or open an existing thread in the sidebar.")
+            : gt("Add a project or move existing projects into this profile.")}
         </p>
         {projects
           .filter((p) => p.archivedAt == null)
@@ -215,12 +223,14 @@ export function SidebarProfileLanding() {
             </Button>
           ))}
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => openCommandPalette({ open: "add-project" })}>Add project</Button>
+          <Button onClick={() => openCommandPalette({ open: "add-project" })}>
+            <T>Add project</T>
+          </Button>
           <Button variant="outline" onClick={() => openProfileManager()}>
-            Manage profiles
+            <T>Manage profiles</T>
           </Button>
           <Button variant="ghost" onClick={() => void navigate({ to: "/settings/connections" })}>
-            Connect environment
+            <T>Connect environment</T>
           </Button>
         </div>
       </div>
@@ -241,6 +251,7 @@ export function SidebarProfileManager() {
   );
 }
 function ProfileManagerContent() {
+  const gt = useGT();
   const document = useSidebarProfiles((s) => s.document);
   const moveProjects = useSidebarProfiles((s) => s.moveProjects);
   const projects = useProjects();
@@ -278,7 +289,7 @@ function ProfileManagerContent() {
       setBusy(false);
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save profiles.");
+      setError(cause instanceof Error ? cause.message : gt("Could not save profiles."));
       setBusy(false);
       return false;
     }
@@ -299,19 +310,29 @@ function ProfileManagerContent() {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Manage profiles</DialogTitle>
-        <DialogDescription>Organize projects into separate work contexts.</DialogDescription>
+        <DialogTitle>
+          <T>Manage profiles</T>
+        </DialogTitle>
+        <DialogDescription>
+          <T>Organize projects into separate work contexts.</T>
+        </DialogDescription>
         <div className="pt-2">
           <ToggleGroup
-            aria-label="Profile settings"
+            aria-label={gt("Profile settings")}
             value={[section]}
             onValueChange={(next) => {
               if (next[0]) setSection(next[0]);
             }}
           >
-            <Toggle value="profiles">Profiles</Toggle>
-            <Toggle value="projects">Projects</Toggle>
-            <Toggle value="environments">Environments</Toggle>
+            <Toggle value="profiles">
+              <T>Profiles</T>
+            </Toggle>
+            <Toggle value="projects">
+              <T>Projects</T>
+            </Toggle>
+            <Toggle value="environments">
+              <T>Environments</T>
+            </Toggle>
           </ToggleGroup>
         </div>
       </DialogHeader>
@@ -322,7 +343,7 @@ function ProfileManagerContent() {
           </Alert>
         ) : null}
         {section === "profiles" ? (
-          <section aria-label="Profile order" className="space-y-4">
+          <section aria-label={gt("Profile order")} className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">{document.profiles.length} profiles</p>
               <Button
@@ -332,7 +353,7 @@ function ProfileManagerContent() {
                 onClick={() => editProfile(null)}
               >
                 <PlusIcon />
-                New profile
+                <T>New profile</T>
               </Button>
             </div>
             <div className="divide-y divide-border">
@@ -379,7 +400,7 @@ function ProfileManagerContent() {
                             size="icon-sm"
                             variant="ghost"
                             disabled={busy}
-                            aria-label={`Actions for ${p.name}`}
+                            aria-label={gt("Actions for {value0}", { value0: p.name })}
                           />
                         }
                       >
@@ -388,18 +409,18 @@ function ProfileManagerContent() {
                       <MenuPopup align="end">
                         <MenuItem onClick={() => editProfile(p)}>
                           <PencilIcon />
-                          Edit profile
+                          <T>Edit profile</T>
                         </MenuItem>
                         <MenuItem disabled={index === 0} onClick={() => reorder(p.id, index - 1)}>
                           <ArrowUpIcon />
-                          Move up
+                          <T>Move up</T>
                         </MenuItem>
                         <MenuItem
                           disabled={index === document.profiles.length - 1}
                           onClick={() => reorder(p.id, index + 1)}
                         >
                           <ArrowDownIcon />
-                          Move down
+                          <T>Move down</T>
                         </MenuItem>
                         {p.id !== GENERAL_PROFILE_ID ? (
                           <>
@@ -413,7 +434,7 @@ function ProfileManagerContent() {
                               }}
                             >
                               <Trash2Icon />
-                              Delete profile…
+                              <T>Delete profile…</T>
                             </MenuItem>
                           </>
                         ) : null}
@@ -441,11 +462,13 @@ function ProfileManagerContent() {
                 }}
               >
                 <h3 className="text-sm font-medium">
-                  {editing ? `Edit ${editing.name}` : "New profile"}
+                  {editing ? gt("Edit {value0}", { value0: editing.name }) : gt("New profile")}
                 </h3>
                 <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor={`${formId}-icon`}>Icon</Label>
+                    <Label htmlFor={`${formId}-icon`}>
+                      <T>Icon</T>
+                    </Label>
                     <Input
                       id={`${formId}-icon`}
                       value={icon}
@@ -454,11 +477,13 @@ function ProfileManagerContent() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor={`${formId}-name`}>Name</Label>
+                    <Label htmlFor={`${formId}-name`}>
+                      <T>Name</T>
+                    </Label>
                     <Input
                       id={`${formId}-name`}
                       autoFocus
-                      placeholder="Work, Personal…"
+                      placeholder={gt("Work, Personal…")}
                       value={name}
                       maxLength={64}
                       onChange={(event) => setName(event.target.value)}
@@ -466,7 +491,9 @@ function ProfileManagerContent() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor={`${formId}-color`}>Color</Label>
+                  <Label htmlFor={`${formId}-color`}>
+                    <T>Color</T>
+                  </Label>
                   <Select
                     value={color}
                     items={SIDEBAR_PROFILE_COLORS.map((value) => ({
@@ -477,7 +504,7 @@ function ProfileManagerContent() {
                       if (value) setColor(value);
                     }}
                   >
-                    <SelectTrigger id={`${formId}-color`} aria-label="Profile color">
+                    <SelectTrigger id={`${formId}-color`} aria-label={gt("Profile color")}>
                       <SelectValue>
                         <span className="flex items-center gap-2">
                           <span aria-hidden className={`size-2 rounded-full ${colors[color]}`} />
@@ -504,28 +531,28 @@ function ProfileManagerContent() {
                     disabled={busy}
                     onClick={() => setShowEditor(false)}
                   >
-                    Cancel
+                    <T>Cancel</T>
                   </Button>
                   <Button size="sm" disabled={busy || !name.trim() || !icon.trim()} type="submit">
-                    {busy ? "Saving…" : editing ? "Save changes" : "Create profile"}
+                    {busy ? gt("Saving…") : editing ? gt("Save changes") : gt("Create profile")}
                   </Button>
                 </div>
               </form>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Drag profiles to reorder them, or use their action menu.
+                <T>Drag profiles to reorder them, or use their action menu.</T>
               </p>
             )}
           </section>
         ) : section === "projects" ? (
-          <section aria-label="Project assignments" className="space-y-4">
+          <section aria-label={gt("Project assignments")} className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Choose a profile for each project, or select several to move together.
+              <T>Choose a profile for each project, or select several to move together.</T>
             </p>
             <Input
               type="search"
-              aria-label="Find projects to assign"
-              placeholder="Search projects or environments…"
+              aria-label={gt("Find projects to assign")}
+              placeholder={gt("Search projects or environments…")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -533,7 +560,7 @@ function ProfileManagerContent() {
               <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 p-3">
                 <span className="mr-auto text-sm">{selected.length} selected</span>
                 <ProfileSelect
-                  label="Move destination"
+                  label={gt("Move destination")}
                   value={destination}
                   onChange={setDestination}
                   disabled={busy}
@@ -564,16 +591,20 @@ function ProfileManagerContent() {
                     });
                   }}
                 >
-                  Move {selected.length}
+                  <T>
+                    Move <Var>{selected.length}</Var>
+                  </T>
                 </Button>
                 <Button size="sm" variant="ghost" disabled={busy} onClick={() => setSelected([])}>
-                  Clear
+                  <T>Clear</T>
                 </Button>
               </div>
             ) : null}
             {undo.length > 0 ? (
               <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-                <span>Projects moved.</span>
+                <span>
+                  <T>Projects moved.</T>
+                </span>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -591,7 +622,7 @@ function ProfileManagerContent() {
                     });
                   }}
                 >
-                  Undo move
+                  <T>Undo move</T>
                 </Button>
               </div>
             ) : null}
@@ -631,12 +662,15 @@ function ProfileManagerContent() {
                         <span className="block truncate font-medium">{project.title}</span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {environmentLabels.get(project.environmentId) ?? project.environmentId}
-                          {project.archivedAt ? " · Archived" : ""}
+                          {project.archivedAt ? gt(" · Archived") : ""}
                         </span>
                       </span>
                     </label>
                     <ProfileSelect
-                      label={`Profile for ${project.title} on ${project.environmentId}`}
+                      label={gt("Profile for {value0} on {value1}", {
+                        value0: project.title,
+                        value1: project.environmentId,
+                      })}
                       value={assignment?.profileId ?? "inherit"}
                       inherit
                       disabled={busy}
@@ -655,16 +689,18 @@ function ProfileManagerContent() {
             {filteredProjects.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 {query
-                  ? "No matching projects."
-                  : "No projects yet. Add a project from the sidebar to get started."}
+                  ? gt("No matching projects.")
+                  : gt("No projects yet. Add a project from the sidebar to get started.")}
               </p>
             ) : null}
           </section>
         ) : (
-          <section aria-label="Environment defaults" className="space-y-4">
+          <section aria-label={gt("Environment defaults")} className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Choose where new and unassigned projects appear. Individual project assignments take
-              priority.
+              <T>
+                Choose where new and unassigned projects appear. Individual project assignments take
+                priority.
+              </T>
             </p>
             <div className="divide-y divide-border">
               {environments.map((environment) => (
@@ -674,10 +710,12 @@ function ProfileManagerContent() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{environment.label}</p>
-                    <p className="text-xs text-muted-foreground">Default profile</p>
+                    <p className="text-xs text-muted-foreground">
+                      <T>Default profile</T>
+                    </p>
                   </div>
                   <ProfileSelect
-                    label={`Default profile for ${environment.label}`}
+                    label={gt("Default profile for {value0}", { value0: environment.label })}
                     value={sidebarProfileForEnvironment(document, environment.environmentId)}
                     disabled={busy}
                     onChange={(profileId) =>
@@ -693,19 +731,21 @@ function ProfileManagerContent() {
             </div>
             {environments.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                Connect an environment to choose its default profile.
+                <T>Connect an environment to choose its default profile.</T>
               </p>
             ) : null}
           </section>
         )}
       </DialogPanel>
       <DialogFooter variant="bare">
-        <p className="mr-auto self-center text-xs text-muted-foreground">Saved on this device</p>
+        <p className="mr-auto self-center text-xs text-muted-foreground">
+          <T>Saved on this device</T>
+        </p>
         <Button
           variant="outline"
           onClick={() => useSidebarProfiles.setState({ managerOpen: false, moveProjects: [] })}
         >
-          Done
+          <T>Done</T>
         </Button>
       </DialogFooter>
       <AlertDialog
@@ -718,15 +758,19 @@ function ProfileManagerContent() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Move its projects and environment defaults to another profile. Projects and chats are
-              kept.
+              <T>
+                Move its projects and environment defaults to another profile. Projects and chats
+                are kept.
+              </T>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 px-6 pb-4">
-            <Label htmlFor={`${formId}-delete-destination`}>Move to</Label>
+            <Label htmlFor={`${formId}-delete-destination`}>
+              <T>Move to</T>
+            </Label>
             <ProfileSelect
               id={`${formId}-delete-destination`}
-              label="Destination for deleted profile"
+              label={gt("Destination for deleted profile")}
               value={deleteDestination}
               onChange={setDeleteDestination}
               excludeProfileId={deleting?.id ?? ""}
@@ -740,7 +784,7 @@ function ProfileManagerContent() {
           </div>
           <AlertDialogFooter>
             <Button variant="outline" disabled={busy} onClick={() => setDeleting(null)}>
-              Cancel
+              <T>Cancel</T>
             </Button>
             <Button
               variant="destructive"
@@ -760,7 +804,7 @@ function ProfileManagerContent() {
                   });
               }}
             >
-              {busy ? "Deleting…" : "Delete profile"}
+              {busy ? gt("Deleting…") : gt("Delete profile")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

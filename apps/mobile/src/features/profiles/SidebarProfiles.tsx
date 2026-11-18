@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react-native";
 import { useState } from "react";
 import { Modal, ScrollView, Switch, TextInput, View } from "react-native";
 import { SIDEBAR_PROFILE_COLORS, type SidebarProfileMutation } from "@t3tools/contracts";
@@ -21,18 +22,24 @@ import { useEnvironments } from "../../state/environments";
 import { uuidv4 } from "../../lib/uuid";
 
 export function MobileSidebarProfiles({ labs = false }: { labs?: boolean }) {
+  const gt = useGT();
   const { document, activeId, error } = useMobileSidebarProfiles();
   const [open, setOpen] = useState(false);
   const report = (cause: unknown) =>
-    Dialog.alert("Profiles not saved", cause instanceof Error ? cause.message : "Try again.");
+    Dialog.alert(
+      gt("Profiles not saved"),
+      cause instanceof Error ? cause.message : gt("Try again."),
+    );
   if (!labs && !document.enabled) return null;
   return (
     <View className="gap-2 px-4 py-2">
       {labs ? (
         <View className="flex-row items-center justify-between">
-          <Text>Sidebar profiles</Text>
+          <Text>
+            <T>Sidebar profiles</T>
+          </Text>
           <Switch
-            accessibilityLabel="Sidebar profiles"
+            accessibilityLabel={gt("Sidebar profiles")}
             value={document.enabled}
             onValueChange={(enabled) => {
               void mutateMobileSidebarProfiles({ kind: "enable", enabled }).catch(report);
@@ -57,7 +64,7 @@ export function MobileSidebarProfiles({ labs = false }: { labs?: boolean }) {
             ))}
             <Button
               size="compact"
-              label="All"
+              label={gt("All")}
               tone={activeId === ALL_PROFILES_ID ? "primary" : "text"}
               onPress={() => selectMobileSidebarProfile(ALL_PROFILES_ID)}
             />
@@ -65,7 +72,12 @@ export function MobileSidebarProfiles({ labs = false }: { labs?: boolean }) {
         </ScrollView>
       )}
       {error ? <Text className="text-danger">{error}</Text> : null}
-      <Button size="compact" tone="text" label="Manage profiles" onPress={() => setOpen(true)} />
+      <Button
+        size="compact"
+        tone="text"
+        label={gt("Manage profiles")}
+        onPress={() => setOpen(true)}
+      />
       {open ? (
         <Modal
           animationType="slide"
@@ -79,6 +91,7 @@ export function MobileSidebarProfiles({ labs = false }: { labs?: boolean }) {
   );
 }
 function MobileProfileManager({ onClose }: { onClose: () => void }) {
+  const gt = useGT();
   const { document } = useMobileSidebarProfiles();
   const projects = useProjects();
   const { environments } = useEnvironments();
@@ -96,7 +109,7 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
       setBusy(false);
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Cannot save profiles.");
+      setError(cause instanceof Error ? cause.message : gt("Cannot save profiles."));
       setBusy(false);
       return false;
     }
@@ -109,12 +122,16 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
         contentInsetAdjustmentBehavior="automatic"
       >
         <View className="flex-row items-center justify-between">
-          <Text className="text-xl font-t3-semibold">Sidebar profiles</Text>
-          <Button label="Done" size="compact" onPress={onClose} />
+          <Text className="text-xl font-t3-semibold">
+            <T>Sidebar profiles</T>
+          </Text>
+          <Button label={gt("Done")} size="compact" onPress={onClose} />
         </View>
         <Text className="text-foreground-muted">
-          Profiles are saved on this device. Environment defaults apply to new and unassigned
-          projects.
+          <T>
+            Profiles are saved on this device. Environment defaults apply to new and unassigned
+            projects.
+          </T>
         </Text>
         {error ? (
           <Text accessibilityRole="alert" className="text-danger">
@@ -128,7 +145,7 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
             </Text>
             <View className="flex-row flex-wrap gap-2">
               <Button
-                label="Edit"
+                label={gt("Edit")}
                 size="compact"
                 disabled={busy}
                 onPress={() => {
@@ -143,7 +160,10 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
                   key={delta}
                   size="compact"
                   label={delta < 0 ? "↑" : "↓"}
-                  accessibilityLabel={`Move ${profile.name} ${delta < 0 ? "up" : "down"}`}
+                  accessibilityLabel={gt("Move {value0} {value1}", {
+                    value0: profile.name,
+                    value1: delta < 0 ? "up" : "down",
+                  })}
                   disabled={busy || index + delta < 0 || index + delta >= document.profiles.length}
                   onPress={() => {
                     const ids = document.profiles.map((p) => p.id);
@@ -158,10 +178,11 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
                   actions={actions.filter((p) => p.id !== profile.id)}
                   onPressAction={({ nativeEvent }) =>
                     Dialog.confirm({
-                      title: `Delete ${profile.name}?`,
-                      message:
+                      title: gt("Delete {value0}?", { value0: profile.name }),
+                      message: gt(
                         "Projects and environment defaults move to the selected destination. Chats and files are preserved.",
-                      confirmText: "Delete profile",
+                      ),
+                      confirmText: gt("Delete profile"),
                       destructive: true,
                       onConfirm: () => {
                         void run({
@@ -174,7 +195,7 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
                   }
                 >
                   <Button
-                    label="Delete into…"
+                    label={gt("Delete into…")}
                     tone="danger"
                     size="compact"
                     disabled={busy}
@@ -185,17 +206,17 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
             </View>
           </View>
         ))}
-        <Text>{editing ? "Edit profile" : "New profile"}</Text>
+        <Text>{editing ? gt("Edit profile") : gt("New profile")}</Text>
         <TextInput
-          accessibilityLabel="Profile name"
+          accessibilityLabel={gt("Profile name")}
           className="min-h-12 rounded-lg border border-border px-3 text-foreground"
           value={name}
           maxLength={64}
-          placeholder="Profile name"
+          placeholder={gt("Profile name")}
           onChangeText={setName}
         />
         <TextInput
-          accessibilityLabel="Profile icon"
+          accessibilityLabel={gt("Profile icon")}
           className="min-h-12 rounded-lg border border-border px-3 text-foreground"
           value={icon}
           maxLength={16}
@@ -208,10 +229,10 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
             if (next) setColor(next);
           }}
         >
-          <Button label={`Color: ${color}`} onPress={() => {}} />
+          <Button label={gt("Color: {color}", { color: color })} onPress={() => {}} />
         </Menu>
         <Button
-          label={editing ? "Save profile" : "Create profile"}
+          label={editing ? gt("Save profile") : gt("Create profile")}
           disabled={busy || !name.trim()}
           onPress={() => {
             void run({
@@ -225,7 +246,9 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
             });
           }}
         />
-        <Text className="text-lg font-t3-semibold">Environment defaults</Text>
+        <Text className="text-lg font-t3-semibold">
+          <T>Environment defaults</T>
+        </Text>
         {environments.map((environment) => (
           <Menu
             key={environment.environmentId}
@@ -251,11 +274,13 @@ function MobileProfileManager({ onClose }: { onClose: () => void }) {
             </View>
           </Menu>
         ))}
-        <Text className="text-lg font-t3-semibold">Projects</Text>
+        <Text className="text-lg font-t3-semibold">
+          <T>Projects</T>
+        </Text>
         {projects.map((project) => (
           <Menu
             key={`${project.environmentId}:${project.id}`}
-            actions={[{ id: "inherit", title: "Use environment default" }, ...actions]}
+            actions={[{ id: "inherit", title: gt("Use environment default") }, ...actions]}
             onPressAction={({ nativeEvent }) => {
               void run({
                 kind: "assign-projects",

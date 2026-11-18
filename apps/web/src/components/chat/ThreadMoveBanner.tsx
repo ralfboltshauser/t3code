@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { ArrowRightLeftIcon } from "lucide-react";
 import type {
   EnvironmentId,
@@ -8,7 +9,7 @@ import type {
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { incomingMoveRecoveryCommand } from "@t3tools/client-runtime/state/threadHandoff";
-import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { namedClipboardTarget, useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useNavigate } from "@tanstack/react-router";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { openThreadMove } from "./threadMoveDialogState";
@@ -27,9 +28,10 @@ export function useThreadMoveBanner(
     readonly linkOrigin?: OrchestrationV2LinkOrigin | null | undefined;
   } | null,
 ): ComposerBannerStackItem | null {
+  const gt = useGT();
   const retry = useAtomCommand(threadHandoffEnvironment.retry);
   const { copyToClipboard, isCopied } = useCopyToClipboard({
-    target: "incoming file recovery command",
+    target: namedClipboardTarget("incoming file recovery command"),
   });
   const navigate = useNavigate();
   const { presentationById } = useEnvironments();
@@ -43,15 +45,19 @@ export function useThreadMoveBanner(
       group: "environment",
       variant: "info",
       icon: <ArrowRightLeftIcon />,
-      title: `Moved from ${thread.linkOrigin?.label ?? "another machine"}`,
+      title: gt("Moved from {value0}", { value0: thread.linkOrigin?.label ?? "another machine" }),
       description: recovery
-        ? "Recent conversation text and Git files arrived in a disposable worktree. Its original incoming files are retained for recovery. Stop external writers before moving again."
-        : "Recent conversation text and Git files arrived in a new worktree. Earlier history and local-only resources remain on the source.",
+        ? gt(
+            "Recent conversation text and Git files arrived in a disposable worktree. Its original incoming files are retained for recovery. Stop external writers before moving again.",
+          )
+        : gt(
+            "Recent conversation text and Git files arrived in a new worktree. Earlier history and local-only resources remain on the source.",
+          ),
       actions: (
         <>
           {recovery ? (
             <Button size="xs" variant="ghost" onClick={() => copyToClipboard(recovery, undefined)}>
-              {isCopied ? "Copied recovery command" : "Copy recovery command"}
+              {isCopied ? gt("Copied recovery command") : gt("Copy recovery command")}
             </Button>
           ) : null}
           {presentationById.get(origin.environmentId)?.connection.phase === "connected" ? (
@@ -67,7 +73,7 @@ export function useThreadMoveBanner(
                 })
               }
             >
-              Source history
+              <T>Source history</T>
             </Button>
           ) : null}
         </>
@@ -82,16 +88,20 @@ export function useThreadMoveBanner(
     icon: <ArrowRightLeftIcon />,
     title:
       move.state === "departed"
-        ? `Moved to ${move.label}`
+        ? gt("Moved to {value0}", { value0: move.label })
         : move.state === "failed"
-          ? `Couldn’t move to ${move.label}`
-          : `Moving to ${move.label}`,
+          ? gt("Couldn’t move to {value0}", { value0: move.label })
+          : gt("Moving to {value0}", { value0: move.label }),
     description:
       move.state === "failed"
         ? move.lastError
         : move.state === "departing"
-          ? (move.lastError ?? "Messages are paused until the destination confirms the move.")
-          : `This copy is read only. ${move.retirement?.reason ?? "Its source files were kept. Continue on the other machine."}`,
+          ? (move.lastError ?? gt("Messages are paused until the destination confirms the move."))
+          : gt("This copy is read only. {value0}", {
+              value0:
+                move.retirement?.reason ??
+                "Its source files were kept. Continue on the other machine.",
+            }),
     actions:
       move.state === "departed" ? (
         <>
@@ -103,7 +113,7 @@ export function useThreadMoveBanner(
                 copyToClipboard(incomingMoveRecoveryCommand(thread.importOrigin)!, undefined)
               }
             >
-              {isCopied ? "Copied recovery command" : "Copy recovery command"}
+              {isCopied ? gt("Copied recovery command") : gt("Copy recovery command")}
             </Button>
           ) : null}
           <Button
@@ -121,8 +131,8 @@ export function useThreadMoveBanner(
             }
           >
             {presentationById.get(move.environmentId)?.connection.phase === "connected"
-              ? "Open chat"
-              : "Connect to open"}
+              ? gt("Open chat")
+              : gt("Connect to open")}
           </Button>
         </>
       ) : move.state === "departing" ? (
@@ -133,7 +143,7 @@ export function useThreadMoveBanner(
             void retry({ environmentId: thread.environmentId, input: { threadId: thread.id } })
           }
         >
-          Check again
+          <T>Check again</T>
         </Button>
       ) : (
         <Button
@@ -141,7 +151,7 @@ export function useThreadMoveBanner(
           variant="ghost"
           onClick={() => openThreadMove(scopeThreadRef(thread.environmentId, thread.id))}
         >
-          Try again
+          <T>Try again</T>
         </Button>
       ),
   };

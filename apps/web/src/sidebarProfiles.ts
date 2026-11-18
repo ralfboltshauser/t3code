@@ -1,3 +1,5 @@
+import { msg } from "gt-react";
+import { m } from "./i18n/messages";
 import { create } from "zustand";
 import type {
   SidebarProfileMutation,
@@ -76,7 +78,7 @@ export function loadSidebarProfiles(): Promise<void> {
 function reportError(error: unknown) {
   useSidebarProfiles.setState({
     ready: true,
-    error: error instanceof Error ? error.message : "Cannot save sidebar profiles.",
+    error: error instanceof Error ? error.message : m(msg("Cannot save sidebar profiles.")),
   });
 }
 export async function mutateSidebarProfiles(mutation: SidebarProfileMutation) {
@@ -141,9 +143,10 @@ export async function assignCreatedProject(project: ScopedProjectRef, profileId:
   } catch {
     toastManager.add({
       type: "error",
-      title: "Project created; profile assignment needs retry",
-      description:
-        "The project is safe. Assign it in Manage profiles; do not create or clone it again.",
+      title: m(msg("Project created; profile assignment needs retry")),
+      description: m(
+        msg("The project is safe. Assign it in Manage profiles; do not create or clone it again."),
+      ),
     });
     openProfileManager([project]);
   }
