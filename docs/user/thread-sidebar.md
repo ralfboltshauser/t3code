@@ -135,7 +135,7 @@ open.
 
 Threads that are working or waiting on work they will resume from move into a collapsed
 **Working** section below the active list.
-That includes subagents, watched pull requests with checks still running, Claude monitors,
+That includes running side chats, subagents, watched pull requests with checks still running, Claude monitors,
 and background commands or other monitors the agent says it is waiting on. A dev server or other process an agent leaves running does not keep a thread
 there. A thread returns to the top of the active list when it finishes, fails, or needs an approval or
 answer. The Working section lists the thread you last sent work to first. Pinned threads stay in
@@ -318,6 +318,11 @@ parent do not change existing side chats.
 
 To use what you learned, choose **Bring back**. The thread gets the side chat with
 your next message there. Bring back is available while the thread is idle.
+
+On web and desktop, the parent thread's sidebar row shows a ring and count summarizing
+its side chats. Hover for the status breakdown, or select it to open a side chat.
+Your configured **Thread: Settle** shortcut settles the focused side chat and closes
+its tab. Its history stays available from the sidebar indicator or thread details.
 
 Closing a side chat you never sent a message in deletes it. To delete one you used,
 choose **Delete** at the top of the side chat. Deleting a thread also deletes its

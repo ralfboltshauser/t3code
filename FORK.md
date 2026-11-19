@@ -338,6 +338,39 @@ vp test run apps/web/src/components/Sidebar.backlog.browser.test.tsx apps/web/sr
 pnpm --dir evals mcp-tool-use --case backlog-until-manual-restore --model gpt-6.1-sol --shell-model gpt-6.1-terra --samples 1 --out runs/backlog-preservation
 ```
 
+Side-chat activity is visible on web/desktop parent rows in both sidebar layouts,
+using the project status ring and count with a tooltip breakdown and a selectable
+child list. Keep the parent's own status separate. Side-chat shell subscriptions
+retain streaming stability but update on completion, requests, visits and deletion.
+Reuse server-first visit watermarks for unread results. The shared client shell
+rolls running side chats into Working placement; requests, actionable plans,
+failures and pending guest messages retain their attention priority. Native mobile
+shares that placement while retaining its existing side-chat presentation.
+
+The configured `thread.settle` shortcut targets the focused embedded side chat
+throughout its pane, settles through the existing guarded action and closes only
+that tab after success. Failure leaves it open. A reopened settled side chat closes
+without toggling back to unsettled; the existing Un-settle action remains available.
+Keep other thread shortcuts isolated from the parent, preserve main-thread
+settle-and-advance, and retain side-chat history and Undo. Recursive side chats
+remain disabled. No wire or persistence change is needed.
+
+Owning paths are shared `state/{models,threadInbox,threadShell}.ts`, web
+`sidebar/SidebarSideChatsStatus.tsx`, `SidebarThreadRow.tsx`, and
+`chat/useChatShortcuts.ts` and `chat/useThreadLifecycle.tsx`.
+The Working policy adapts upstream PR #28686; reconcile with it when it merges.
+Verify Working-to-attention/completion transitions, ring counts and child navigation,
+shortcut scope, failed settlement and retained history with:
+
+```sh
+vp test run packages/client-runtime/src/state/threadShell.test.ts packages/client-runtime/src/state/threadInbox.test.ts apps/web/src/components/Sidebar.logic.test.ts apps/mobile/src/features/threads/threadListV2.test.ts apps/web/src/components/chat/useChatShortcuts.browser.test.tsx apps/web/src/components/chat/useThreadLifecycle.browser.test.tsx apps/web/src/components/sidebar/SidebarSideChatsStatus.browser.test.tsx
+vp run scenarios:prove scripts/scenarios/side-chat-settle-closes-tab.e2e.ts --base <personal-base> --head <feature-head>
+```
+
+The real-client proof must show the configured shortcut closing the side chat,
+its status breakdown, and reopening with history; inspect mixed working, attention
+and unread ring segments in both sidebar layouts.
+
 ## Maintenance and installation
 
 Read [the operations guide](docs/operations/personal-fork.md) for explicit batched releases, daily upstream

@@ -28,7 +28,7 @@ vi.mock(import("../../state/use-orchestration-command"), async (importOriginal) 
 
 vi.mock(import("../../hooks/useThreadActions"), async (importOriginal) => ({
   ...(await importOriginal()),
-  useThreadActions: (() => ({})) as never,
+  useThreadActions: (() => ({ settleThread: (input: unknown) => state.switchRef(input) })) as never,
   useAcknowledgeThreadWoke: (() => () => undefined) as never,
 }));
 
@@ -38,6 +38,9 @@ vi.mock(import("../../state/entities"), async (importOriginal) => ({
 }));
 
 import { render } from "../../../test/render";
+import { makeThreadFixture } from "../../test-fixtures";
+import { useRightPanelStore } from "../../rightPanelStore";
+import { registerSettleAndAdvance } from "../../settleAndAdvance";
 import { useThreadLifecycle } from "./useThreadLifecycle";
 
 const environmentId = EnvironmentId.make("environment:test");
@@ -100,6 +103,7 @@ it.each([
 
 function RestoreBranchHarness(props: {
   readonly thread: ThreadInput;
+  readonly shell?: EnvironmentThreadShell;
   readonly currentRouteThreadKeyRef: { readonly current: string | null };
   readonly refreshGitStatus: () => void;
   readonly focusComposer: () => void;
@@ -110,11 +114,11 @@ function RestoreBranchHarness(props: {
     currentRouteThreadKeyRef: props.currentRouteThreadKeyRef,
     canOperateThread: true,
     clientSettingsHydrated: true,
-    activeThreadShell: null,
+    activeThreadShell: props.shell ?? null,
     limitRecoveryHoldsSnooze: false,
     activeLatestRun: null as never,
     activeProjectCwd: "/repo",
-    serverConfig: null,
+    serverConfig: props.shell ? ({} as never) : null,
     runtimeMode: "full-access" as never,
     isWorking: false,
     runIsLive: false,
@@ -137,6 +141,17 @@ function RestoreBranchHarness(props: {
   });
   return (
     <>
+      <button
+        type="button"
+        onClick={() =>
+          lifecycle.shortcuts["thread.settle"]({
+            event: new KeyboardEvent("keydown"),
+            terminalFocusOwner: null,
+          })
+        }
+      >
+        Settle
+      </button>
       {lifecycle.childInputNow?.description}
       {lifecycle.childInputNow?.actions}
       {lifecycle.workNow?.actions}
@@ -266,5 +281,63 @@ it.each(["Success", "Failure"] as const)(
     await expect.element(page.getByRole("button", { name: "Stopping..." })).toBeDisabled();
     expect(state.switchRef).toHaveBeenCalledTimes(2);
     completions[1]!({ _tag: "Success", value: undefined });
+  },
+);
+
+it.each(["Success", "Failure"] as const)(
+  "closes only the settled side-chat tab after %s",
+  async (outcome) => {
+    setup();
+    useRightPanelStore.setState(useRightPanelStore.getInitialState());
+    const parentRef = scopeThreadRef(environmentId, ThreadId.make("parent"));
+    const thread = threadInput("side", "main");
+    const shell = makeThreadFixture({
+      id: thread.activeThreadId,
+      environmentId,
+      lineage: {
+        sideChat: true,
+        relationshipToParent: "fork",
+        parentThreadId: parentRef.threadId,
+        rootThreadId: parentRef.threadId,
+      },
+    });
+    let complete!: (result: unknown) => void;
+    state.switchRef = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const advance = vi.fn();
+    using _advance = { [Symbol.dispose]: registerSettleAndAdvance(advance) };
+    useRightPanelStore.getState().openSideChat(parentRef, ThreadId.make("sibling"));
+    useRightPanelStore.getState().openSideChat(parentRef, thread.activeThreadId);
+    await using screen = await render(
+      <RestoreBranchHarness
+        thread={thread}
+        shell={shell}
+        currentRouteThreadKeyRef={{ current: thread.routeThreadKey }}
+        refreshGitStatus={() => {}}
+        focusComposer={() => {}}
+      />,
+    );
+    await screen.getByRole("button", { name: "Settle", exact: true }).click();
+    expect(state.switchRef).toHaveBeenCalledWith(thread.activeThreadRef);
+    expect(advance).not.toHaveBeenCalled();
+    const surfaces = () =>
+      Object.values(useRightPanelStore.getState().byThreadKey).flatMap((panel) => panel.surfaces);
+    expect(surfaces().some((surface) => surface.id === "side-chat:side")).toBe(true);
+    complete(
+      outcome === "Success"
+        ? { _tag: "Success", value: undefined }
+        : { _tag: "Failure", cause: Cause.fail(new Error("settle refused")) },
+    );
+    await vi.waitFor(() =>
+      expect(surfaces().some((surface) => surface.id === "side-chat:side")).toBe(
+        outcome === "Failure",
+      ),
+    );
+    expect(surfaces().some((surface) => surface.id === "side-chat:sibling")).toBe(true);
+    expect(screen.router?.state.location.pathname).toBe("/");
   },
 );

@@ -141,10 +141,11 @@ const ctrlShift = (key: string, command: KeybindingCommand) => ({
 const sideChatKeybindings: ResolvedKeybindingsConfig = [
   ctrlShift("m", "modelPicker.toggle"),
   ctrlShift("x", "thread.stop"),
+  ctrlShift("e", "thread.settle"),
 ];
 
 // A side chat in the main chat's panel: no window listeners, only its composer's own chords.
-function SideChat(props: { toggles: string[]; stops: string[] }) {
+function SideChat(props: { toggles: string[]; stops: string[]; settled?: string[] }) {
   const [composerElement, setComposerElement] = useState<HTMLDivElement | null>(null);
   useChatShortcuts({
     enabled: false,
@@ -161,13 +162,19 @@ function SideChat(props: { toggles: string[]; stops: string[] }) {
     },
     branchToolbarRef: { current: null },
     closeThreadFind: () => {},
-    commands: { "thread.stop": () => void props.stops.push("stop") },
+    commands: {
+      "thread.stop": () => void props.stops.push("stop"),
+      "thread.settle": () => void props.settled?.push("side"),
+    },
     fallback: () => undefined,
   });
   return (
     <>
-      <div ref={setComposerElement}>
-        <textarea aria-label="Side chat composer" />
+      <div data-side-chat-pane>
+        <button type="button">Side chat message</button>
+        <div ref={setComposerElement}>
+          <textarea aria-label="Side chat composer" />
+        </div>
       </div>
       <textarea aria-label="Main composer" />
     </>
@@ -244,4 +251,19 @@ it("runs right panel commands from inside a side chat pane, but not thread comma
   await userEvent.keyboard("q");
 
   expect(ran).toEqual(["toggle", "close", "toggle"]);
+});
+
+it("settles the side chat from its composer and conversation, without settling the main chat", async () => {
+  const settled: string[] = [];
+  await using screen = await render(
+    <SideChat toggles={[]} stops={[]} settled={settled} />,
+    options,
+  );
+  await userEvent.click(screen.getByLabelText("Side chat composer"));
+  await userEvent.keyboard("{Control>}{Shift>}E{/Shift}{/Control}");
+  await userEvent.click(screen.getByRole("button", { name: "Side chat message" }));
+  await userEvent.keyboard("{Control>}{Shift>}E{/Shift}{/Control}");
+  await userEvent.click(screen.getByLabelText("Main composer"));
+  await userEvent.keyboard("{Control>}{Shift>}E{/Shift}{/Control}");
+  expect(settled).toEqual(["side", "side"]);
 });

@@ -38,6 +38,7 @@ import {
   isBackgroundWorkStopPending,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
+import { useRightPanelStore } from "../../rightPanelStore";
 import { settleAndAdvance } from "../../settleAndAdvance";
 import type { ChatShortcutCommands } from "./useChatShortcuts";
 import { hasUnseenCompletion, resolveThreadLastVisitedAt } from "../Sidebar.logic";
@@ -725,9 +726,31 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       if (!activeThreadShell || !activeThreadRef) return false;
       if (!event.repeat) markThreadUnread(activeThreadRef);
     },
-    "thread.settle": () => {
+    "thread.settle": ({ event }) => {
+      if (event.repeat) return;
       if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;
       if (!activeThreadShell || !activeThreadRef || !serverConfigLoaded) return;
+      if (
+        activeThreadShell.lineage.sideChat === true &&
+        activeThreadShell.lineage.parentThreadId !== null
+      ) {
+        const parentRef = scopeThreadRef(environmentId, activeThreadShell.lineage.parentThreadId);
+        const threadRef = activeThreadRef;
+        if (activeThreadSettled) {
+          useRightPanelStore.getState().closeSurface(parentRef, `side-chat:${threadRef.threadId}`);
+          return;
+        }
+        void settleThread(threadRef).then((result) => {
+          if (result._tag === "Success") {
+            useRightPanelStore
+              .getState()
+              .closeSurface(parentRef, `side-chat:${threadRef.threadId}`);
+          } else {
+            toastThreadActionFailure(m(msg("Failed to settle thread")))(result);
+          }
+        });
+        return;
+      }
       if (activeThreadSettled) {
         void handleUnsettleActiveThread();
         return;

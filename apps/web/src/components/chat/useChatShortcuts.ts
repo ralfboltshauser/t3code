@@ -32,8 +32,8 @@ const SIDE_CHAT_PANE_COMMANDS: ReadonlySet<KeybindingCommand> = new Set([
 interface ChatShortcutsInput {
   readonly enabled: boolean;
   /**
-   * A side chat inside another chat leaves the window to the outer chat. It runs only
-   * composer chords, for keys pressed inside `composerElement`.
+   * An embedded chat handles its own settle command throughout its pane and composer
+   * chords inside `composerElement`; window commands remain with the outer chat.
    */
   readonly embedded?: boolean;
   readonly composerElement?: HTMLElement | null;
@@ -122,20 +122,25 @@ export function useChatShortcuts(input: ChatShortcutsInput) {
     const command = resolveChatShortcutCommand(event, input.keybindings, input.scriptKeybindings, {
       context: input.getShortcutContext(event.target),
     });
-    const run = command
-      ? composerShortcutCommands(input.composerRef, input.branchToolbarRef)[command]
-      : undefined;
+    const inComposer = event.target instanceof Node && composerElement?.contains(event.target);
+    const run =
+      command === "thread.settle"
+        ? input.commands[command]
+        : command && inComposer
+          ? composerShortcutCommands(input.composerRef, input.branchToolbarRef)[command]
+          : undefined;
     if (!run || run({ event, terminalFocusOwner: null }) === false) return;
     event.preventDefault();
     event.stopPropagation();
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- attaches keydown listeners for chat shortcuts and find dismissal: on the window, or on an embedded chat's composer
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- attaches keydown listeners for chat shortcuts and find dismissal: on the window, or on an embedded chat's pane
   useEffect(() => {
     if (embedded) {
       if (composerElement === null) return;
       const onComposerKeyDown = (event: KeyboardEvent) => handleComposerShortcut(event);
-      composerElement.addEventListener("keydown", onComposerKeyDown, true);
-      return () => composerElement.removeEventListener("keydown", onComposerKeyDown, true);
+      const pane = composerElement.closest<HTMLElement>("[data-side-chat-pane]") ?? composerElement;
+      pane.addEventListener("keydown", onComposerKeyDown, true);
+      return () => pane.removeEventListener("keydown", onComposerKeyDown, true);
     }
     const onKeyDownCapture = (event: KeyboardEvent) => handleShortcut(event);
     const onKeyDown = (event: KeyboardEvent) => dismissFind(event);
