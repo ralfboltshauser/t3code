@@ -1,4 +1,6 @@
 import { useProfileProjects } from "../sidebarProfiles";
+import { useMessages } from "gt-react";
+
 import { orderItemsByPreferredIds, sortSidebarV2ProjectGroups } from "../components/Sidebar.logic";
 import {
   getProjectOrderKey,
@@ -21,6 +23,7 @@ export function useSidebarProjectGroups() {
   const groupingSettings = useClientSettings(selectProjectGroupingSettings);
   const environments = useEnvironmentIdentities();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const resolve = useMessages();
   const orderedProjects = orderItemsByPreferredIds({
     items: projects,
     preferredIds: projectOrder,
@@ -33,12 +36,15 @@ export function useSidebarProjectGroups() {
   const labels = new Map(
     environments.map((environment) => [environment.environmentId, environment.label] as const),
   );
-  const unsortedGroups = buildSidebarProjectSnapshots({
-    projects: sortOrder === "manual" ? orderedProjects : projects,
-    groupScratchProjects: true,
-    settings: groupingSettings,
-    primaryEnvironmentId,
-    resolveEnvironmentLabel: (environmentId) => labels.get(environmentId) ?? null,
-  });
+  const unsortedGroups = buildSidebarProjectSnapshots(
+    {
+      projects: sortOrder === "manual" ? orderedProjects : projects,
+      groupScratchProjects: true,
+      settings: groupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) => labels.get(environmentId) ?? null,
+    },
+    resolve,
+  );
   return sortSidebarV2ProjectGroups(unsortedGroups, threads, sortOrder, delegatedUnderParent);
 }
