@@ -101,6 +101,9 @@ vi.mock("../../state/entities", () => ({
   useProjects: () => [regular, scratch],
   useServerConfigs: () => new Map([[environmentId, { scratchWorkspaceRoot: "/scratch" }]]),
 }));
+vi.mock("../../state/sidebar-profiles", () => ({
+  useMobileProfileProjects: () => [regular, scratch],
+}));
 vi.mock("../../state/projects", () => ({ projectEnvironment: { openScratch: {} } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => harness.openScratch }));
 vi.mock("../../state/use-composer-drafts", () => ({ retargetSavedNewTaskDraft: vi.fn() }));
