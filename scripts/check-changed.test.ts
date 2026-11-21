@@ -409,8 +409,11 @@ function launcherFixture() {
     import path from 'node:path';
     const args = process.argv.slice(2);
     fs.writeFileSync(path.join(process.env.RECORDS, process.pid + '.json'), JSON.stringify({ args, cwd: process.cwd() }));
-    console.log('fixture stdout: ' + args[0]);
-    console.error('fixture stderr: ' + args[0]);
+    fs.writeSync(1, 'fixture stdout: ' + args[0] + '\\n');
+    fs.writeSync(2, 'fixture stderr: ' + args[0] + '\\n');
+    if (args[0] === 'test' && process.env.FAIL_STEP === 'test-timeout') {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
+    }
     process.exit(args[0] === process.env.FAIL_STEP ? 23 : 0);
   `,
   );
@@ -514,27 +517,43 @@ it("lints an Astro component and runs knip when only it changed", () => {
   expect(commands).toContainEqual(["exec", "knip", "--exports"]);
 });
 
-it.each(["install", "lint"])("reports a failing %s step with its output", (step) => {
-  using project = launcherFixture();
-  project.write(project.source, "export const value = 2;\n");
-  project.write(
-    "packages/example/package.json",
-    JSON.stringify({ name: "example", version: "1.0.1" }),
-  );
-  const result = project.run(step);
-  expect(result.status, result.stdout + result.stderr).toBe(1);
-  const install = project.calls().find(({ args }) => args[0] === "install");
-  expect(install?.args, result.stdout + result.stderr).toEqual([
-    "install",
-    "--lockfile-only",
-    "--ignore-scripts",
-  ]);
-  expect(install?.cwd).not.toBe(project.root);
-  expect(result.stdout + result.stderr).toContain(`fixture stdout: ${step}`);
-  expect(result.stdout + result.stderr).toContain(`fixture stderr: ${step}`);
-  expect(result.stdout).toContain(step === "install" ? "FAIL  unused patches" : "FAIL  lint");
-  if (step === "lint") expect(result.stdout).toContain("pass  unused patches");
-  expect(
-    NodeFS.existsSync(NodePath.join(project.root, "node_modules/.cache/check-changed.json")),
-  ).toBe(false);
-});
+it.each(["install", "lint", "test", "test-timeout"])(
+  "reports a failing %s step with its output",
+  (mode) => {
+    const step = mode === "test-timeout" ? "test" : mode;
+    using project = launcherFixture();
+    project.write(project.source, "export const value = 2;\n");
+    if (step === "test") {
+      project.write(project.source.replace(/\.ts$/, ".test.ts"), "export const value = 2;\n");
+    }
+    project.write(
+      "packages/example/package.json",
+      JSON.stringify({ name: "example", version: "1.0.1" }),
+    );
+    const result = project.run(mode, mode === "test-timeout" ? ["--timeout", "1"] : []);
+    expect(result.status, result.stdout + result.stderr).toBe(1);
+    const install = project.calls().find(({ args }) => args[0] === "install");
+    expect(install?.args, result.stdout + result.stderr).toEqual([
+      "install",
+      "--lockfile-only",
+      "--ignore-scripts",
+    ]);
+    expect(install?.cwd).not.toBe(project.root);
+    if (step === "test") expect(project.calls().some(({ args }) => args[0] === "test")).toBe(true);
+    expect(result.stdout + result.stderr).toContain(`fixture stdout: ${step}`);
+    expect(result.stdout + result.stderr).toContain(`fixture stderr: ${step}`);
+    expect(result.stdout).toContain(
+      mode === "test-timeout"
+        ? "TIMEOUT  test (1 files)"
+        : step === "install"
+          ? "FAIL  unused patches"
+          : step === "test"
+            ? "FAIL  test (1 files)"
+            : "FAIL  lint",
+    );
+    if (step === "lint") expect(result.stdout).toContain("pass  unused patches");
+    expect(
+      NodeFS.existsSync(NodePath.join(project.root, "node_modules/.cache/check-changed.json")),
+    ).toBe(false);
+  },
+);

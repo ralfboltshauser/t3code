@@ -260,7 +260,8 @@ under `scripts/personal-fork/`. Release verification runs one candidate check
 process and binds its completed exit status and log to unchanged source and
 relevant environment inputs. Preserve this evidence gate in `verification.py`,
 `workflow.py` and `manage.py`; narrative verification alone cannot publish or
-stage. Independent host builds overlap, while every required host must validate
+stage. Changed-check tests stream output so interrupted runs retain partial
+diagnostics. Independent host builds overlap, while every required host must validate
 before queuing. Mac bundles become visible only after signing and strict
 verification at a temporary path. Shared `testing/longTempDir.ts` canonicalizes
 Darwin temp aliases without removing explicit symlink test coverage.

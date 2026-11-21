@@ -14,7 +14,7 @@
 // Uncommitted and untracked files count. Affected packages come from
 // .github/scripts/ci-changes.cjs, the same mapping CI uses to gate its jobs.
 // The steps run side by side within a budget derived from the machine's cores
-// and available memory, and each prints its output when it finishes. A step
+// and available memory. Tests stream progress; other steps print on completion. A step
 // running past the timeout is killed with its process group and reported as
 // TIMEOUT. A rerun on exactly the files of the last passing run prints that
 // run's summary.
@@ -439,7 +439,7 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
 
   // Output is piped, so keep the colors a terminal would get.
   const env = process.stdout.isTTY ? { FORCE_COLOR: "1" } : {};
-  const vp = (args: ReadonlyArray<string>, cwd = root) =>
+  const vp = (args: ReadonlyArray<string>, cwd = root, streamOutput = false) =>
     Effect.scoped(
       Effect.gen(function* () {
         const [command, commandArgs] = vitePlusCommand(args, platform);
@@ -451,8 +451,14 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
             forceKillAfter: "5 seconds",
           }),
         );
+        const text = Stream.decodeText(handle.all);
         const [output, exitCode] = yield* Effect.all(
-          [Stream.mkString(Stream.decodeText(handle.all)), handle.exitCode],
+          [
+            streamOutput
+              ? Stream.runForEach(text, (chunk) => Console.log(chunk)).pipe(Effect.as(""))
+              : Stream.mkString(text),
+            handle.exitCode,
+          ],
           { concurrency: 2 },
         );
         return { ok: exitCode === 0, output };
@@ -504,7 +510,10 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   ].filter((dir) => files.some((file) => file.startsWith(`${dir}/`)));
   const filters = (names: ReadonlyArray<string>) => names.flatMap((name) => ["--filter", name]);
   const typecheckWorkers = Math.min(concurrency, affected.length);
-  const command = (name: string, args: ReadonlyArray<string>) => ({ name, run: vp(args) });
+  const command = (name: string, args: ReadonlyArray<string>, streamOutput = false) => ({
+    name,
+    run: vp(args, root, streamOutput),
+  });
   const compilerFiles = compilerApps.reduce((count, app) => count + app.names.length, 0);
 
   const steps: Array<Step<never>> = [
@@ -543,12 +552,11 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
     ...(vitestTests.length > 0
       ? [
           {
-            ...command(`test (${vitestTests.length} files)`, [
-              "test",
-              "run",
-              "--passWithNoTests",
-              ...vitestTests,
-            ]),
+            ...command(
+              `test (${vitestTests.length} files)`,
+              ["test", "run", "--passWithNoTests", "--reporter=verbose", ...vitestTests],
+              true,
+            ),
             serial: true,
           },
         ]
