@@ -283,7 +283,11 @@ it.effect("seeds the first continuation and replays its original run after later
       assert.equal(runtime.turns.length, 1);
       const turn = runtime.turns[0]!;
       for (const message of request.messages) assert.include(turn.message.text, message.text);
-      assert.include(turn.message.text, `User message:\n${request.continuationPrompt}`);
+      assert.include(
+        turn.message.text,
+        "User message:\n[T3 Code: this message came through T3 Code's tools, not from the user typing in this chat.]\n\n" +
+          request.continuationPrompt,
+      );
       assert.deepInclude(turn.runtimePolicy, {
         runtimeMode: request.runtimeMode,
         interactionMode: request.interactionMode,

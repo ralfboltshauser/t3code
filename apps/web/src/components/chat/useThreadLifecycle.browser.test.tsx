@@ -39,7 +39,7 @@ vi.mock(import("../../state/entities"), async (importOriginal) => ({
 
 import { render } from "../../../test/render";
 import { makeThreadFixture } from "../../test-fixtures";
-import { useRightPanelStore } from "../../rightPanelStore";
+import { hostRightPanel, useRightPanelStore } from "../../rightPanelStore";
 import { registerSettleAndAdvance } from "../../settleAndAdvance";
 import { useThreadLifecycle } from "./useThreadLifecycle";
 
@@ -284,13 +284,19 @@ it.each(["Success", "Failure"] as const)(
   },
 );
 
-it.each(["Success", "Failure"] as const)(
-  "closes only the settled side-chat tab after %s",
-  async (outcome) => {
+it.each([
+  { outcome: "Success", host: "parent" },
+  { outcome: "Failure", host: "parent" },
+  { outcome: "Success", host: "another-host" },
+] as const)(
+  "closes only the settled side-chat tab after $outcome in $host",
+  async ({ outcome, host }) => {
     setup();
     useRightPanelStore.setState(useRightPanelStore.getInitialState());
     const parentRef = scopeThreadRef(environmentId, ThreadId.make("parent"));
+    const hostRef = scopeThreadRef(environmentId, ThreadId.make(host));
     const thread = threadInput("side", "main");
+    using _panelHost = { [Symbol.dispose]: hostRightPanel(thread.activeThreadRef, hostRef) };
     const shell = makeThreadFixture({
       id: thread.activeThreadId,
       environmentId,
@@ -310,8 +316,8 @@ it.each(["Success", "Failure"] as const)(
     );
     const advance = vi.fn();
     using _advance = { [Symbol.dispose]: registerSettleAndAdvance(advance) };
-    useRightPanelStore.getState().openSideChat(parentRef, ThreadId.make("sibling"));
-    useRightPanelStore.getState().openSideChat(parentRef, thread.activeThreadId);
+    useRightPanelStore.getState().openThread(hostRef, ThreadId.make("sibling"));
+    useRightPanelStore.getState().openThread(hostRef, thread.activeThreadId);
     await using screen = await render(
       <RestoreBranchHarness
         thread={thread}
@@ -326,18 +332,18 @@ it.each(["Success", "Failure"] as const)(
     expect(advance).not.toHaveBeenCalled();
     const surfaces = () =>
       Object.values(useRightPanelStore.getState().byThreadKey).flatMap((panel) => panel.surfaces);
-    expect(surfaces().some((surface) => surface.id === "side-chat:side")).toBe(true);
+    expect(surfaces().some((surface) => surface.id === "thread:side")).toBe(true);
     complete(
       outcome === "Success"
         ? { _tag: "Success", value: undefined }
         : { _tag: "Failure", cause: Cause.fail(new Error("settle refused")) },
     );
     await vi.waitFor(() =>
-      expect(surfaces().some((surface) => surface.id === "side-chat:side")).toBe(
+      expect(surfaces().some((surface) => surface.id === "thread:side")).toBe(
         outcome === "Failure",
       ),
     );
-    expect(surfaces().some((surface) => surface.id === "side-chat:sibling")).toBe(true);
+    expect(surfaces().some((surface) => surface.id === "thread:sibling")).toBe(true);
     expect(screen.router?.state.location.pathname).toBe("/");
   },
 );

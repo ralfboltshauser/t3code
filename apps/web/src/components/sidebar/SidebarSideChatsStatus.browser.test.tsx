@@ -80,7 +80,7 @@ it("updates the child status breakdown and opens the selected side chat on its p
   );
   expect(
     selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, parentRef)?.id,
-  ).toBe("side-chat:unread");
+  ).toBe("thread:unread");
   await act(() => registry.set(atom, [{ ...unread, lastVisitedAt: unread.latestRun.completedAt }]));
   await expect
     .element(screen.getByRole("button", { name: "Side chats: 1 chat: 1 read or idle" }))

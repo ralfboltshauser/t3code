@@ -38,7 +38,7 @@ import {
   isBackgroundWorkStopPending,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../../hooks/useThreadActions";
-import { useRightPanelStore } from "../../rightPanelStore";
+import { rightPanelHostRef, useRightPanelStore } from "../../rightPanelStore";
 import { settleAndAdvance } from "../../settleAndAdvance";
 import type { ChatShortcutCommands } from "./useChatShortcuts";
 import { hasUnseenCompletion, resolveThreadLastVisitedAt } from "../Sidebar.logic";
@@ -81,7 +81,8 @@ import { useAtomValue } from "@effect/atom-react";
 import type { RunStopPresentation } from "@t3tools/client-runtime/state/thread-execution";
 import { Atom } from "effect/reactivity";
 import { environmentThreadDetails } from "../../state/threads";
-import { resolveThreadOpenRoute } from "../../lib/sideChatPane";
+import { type SideThreadOpenIntent, sideThreadKindOf } from "@t3tools/client-runtime/side-thread";
+import { openSideThread, resolveThreadOpenRoute } from "../../lib/sideChatPane";
 import type { useLocalDispatchState } from "./useLocalDispatchState";
 const RELATED_THREAD_SHELL_WAIT_MS = 1_000;
 
@@ -481,9 +482,11 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
   const handleStopBackgroundWorkStable = useStableCallback(handleStopBackgroundWork);
   const openRelatedThreadGenerationRef = useRef(0);
   // A task delegated to a linked environment opens there; the default is this thread's own.
+  // `intent` comes from the rows that open a subagent, and says the thread is one.
   const onOpenRelatedThread = async (
     threadId: ThreadId,
     threadEnvironmentId: EnvironmentId = environmentId,
+    intent?: SideThreadOpenIntent,
   ) => {
     const generation = ++openRelatedThreadGenerationRef.current;
     const threadRef = scopeThreadRef(threadEnvironmentId, threadId);
@@ -509,6 +512,21 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     const shell = readThreadShell(threadRef);
     if (shell === null ? !shellOmitsChildren && isEnvironmentLive() : shell.deletedAt != null) {
       toastManager.add({ type: "info", title: m(msg("This thread is no longer available")) });
+      return;
+    }
+    // A subagent or side chat opens beside this thread or in its place; its own parent, like any
+    // other thread, only in its place.
+    if (
+      (intent !== undefined || sideThreadKindOf(shell) !== null) &&
+      activeThread?.lineage.parentThreadId !== threadId
+    ) {
+      openSideThread({
+        threadRef,
+        panelRef: activeThreadRef,
+        intent: intent ?? "primary",
+        navigate: (ref) =>
+          void navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(ref) }),
+      });
       return;
     }
     const routeRef = resolveThreadOpenRoute(threadRef, shell);
@@ -734,17 +752,19 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
         activeThreadShell.lineage.sideChat === true &&
         activeThreadShell.lineage.parentThreadId !== null
       ) {
-        const parentRef = scopeThreadRef(environmentId, activeThreadShell.lineage.parentThreadId);
+        const panelRef = rightPanelHostRef(activeThreadRef);
+        const parentRef =
+          panelRef.threadId === activeThreadRef.threadId
+            ? scopeThreadRef(environmentId, activeThreadShell.lineage.parentThreadId)
+            : panelRef;
         const threadRef = activeThreadRef;
         if (activeThreadSettled) {
-          useRightPanelStore.getState().closeSurface(parentRef, `side-chat:${threadRef.threadId}`);
+          useRightPanelStore.getState().closeSurface(parentRef, `thread:${threadRef.threadId}`);
           return;
         }
         void settleThread(threadRef).then((result) => {
           if (result._tag === "Success") {
-            useRightPanelStore
-              .getState()
-              .closeSurface(parentRef, `side-chat:${threadRef.threadId}`);
+            useRightPanelStore.getState().closeSurface(parentRef, `thread:${threadRef.threadId}`);
           } else {
             toastThreadActionFailure(m(msg("Failed to settle thread")))(result);
           }
