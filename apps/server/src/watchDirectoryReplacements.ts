@@ -92,11 +92,14 @@ const resolveWatchTarget = Effect.fn("watchDirectoryReplacements.resolveWatchTar
   const rawTarget = path.isAbsolute(link.value)
     ? link.value
     : `${path.dirname(entry)}${path.sep}${link.value}`;
-  const parent = yield* realPath(path.dirname(rawTarget)).pipe(Effect.option);
-  const unresolved = Option.isSome(parent)
-    ? path.join(parent.value, path.basename(rawTarget))
-    : entry;
-  return yield* resolveSymlinkTarget(unresolved).pipe(Effect.orElseSucceed(() => unresolved));
+  const root = path.parse(rawTarget).root;
+  let unresolved = root;
+  // Resolve each link before a following `..`, including links whose target is missing.
+  for (const segment of rawTarget.slice(root.length).split(path.sep === "\\" ? /[\\/]/ : "/")) {
+    const next = path.join(unresolved, segment);
+    unresolved = yield* resolveSymlinkTarget(next).pipe(Effect.orElseSucceed(() => next));
+  }
+  return unresolved;
 });
 
 /** Watch replacements of a configured directory, its symlink target, and the target's parent. */
