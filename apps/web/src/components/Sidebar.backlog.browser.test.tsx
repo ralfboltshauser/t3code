@@ -55,7 +55,11 @@ it("parks a thread in Backlog and restores it without disturbing timed snoozes",
   const firstRow = page.getByRole("button", { name: new RegExp(`^${first.title},`) });
   await expect.element(firstRow).toBeVisible();
   await userEvent.hover(firstRow);
-  await userEvent.click(firstRow.getByRole("button", { name: "Snooze thread", exact: true }));
+  const firstSnooze = firstRow.getByRole("button", { name: "Snooze thread", exact: true });
+  firstSnooze.element().focus();
+  await expect.element(firstSnooze).toHaveFocus();
+  await userEvent.keyboard("{Enter}");
+  await expect.element(firstSnooze).toHaveAttribute("aria-expanded", "true");
   await userEvent.click(
     page.getByRole("menuitem", { name: "Indefinitely (Backlog)", exact: true }),
   );
@@ -68,7 +72,11 @@ it("parks a thread in Backlog and restores it without disturbing timed snoozes",
     .toBeVisible();
   const secondRow = page.getByRole("button", { name: new RegExp(`^${second.title},`) });
   await userEvent.hover(secondRow);
-  await userEvent.click(secondRow.getByRole("button", { name: "Snooze thread", exact: true }));
+  const secondSnooze = secondRow.getByRole("button", { name: "Snooze thread", exact: true });
+  secondSnooze.element().focus();
+  await expect.element(secondSnooze).toHaveFocus();
+  await userEvent.keyboard("{Enter}");
+  await expect.element(secondSnooze).toHaveAttribute("aria-expanded", "true");
   await userEvent.click(page.getByRole("menuitem", { name: /^In 1 hour/ }));
   await expect.element(page.getByTestId("sidebar-snoozed-shelf-toggle")).toBeVisible();
   await expect.element(backlogHeader).toBeVisible();
