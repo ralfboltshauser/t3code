@@ -476,6 +476,8 @@ describe("environment theme", () => {
               path.join(previous, "shared", "themes", "nightfall.json"),
               encodeThemeFile(NIGHTFALL_THEME),
             );
+            // Some filesystems do not notify a descendant watcher when its grandparent moves.
+            assert.deepEqual(yield* service.current, []);
             assert.deepEqual(yield* Queue.take(snapshots), []);
             yield* fs.rename(previous, active);
             yield* Deferred.succeed(resumeProbes, undefined);
