@@ -4,6 +4,7 @@ import type {
   ProjectId,
   ProjectScript,
   ResolvedKeybindingsConfig,
+  RunId,
   ThreadId,
 } from "@t3tools/contracts";
 
@@ -11,6 +12,7 @@ import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 
 import type { ComposerThreadTarget, DraftId } from "../../composerDraftStore";
+import type { TaskListPlan } from "../../session-logic";
 import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
 import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar } from "../BranchToolbar";
@@ -28,6 +30,7 @@ import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadRepositorySections } from "./ThreadRepositorySections";
 import { ThreadServersPanel } from "./ThreadServersPanel";
+import { ThreadDetailsTasks } from "./ThreadDetailsTasks";
 import {
   ThreadDetailsContext,
   ThreadDetailsUsage,
@@ -93,11 +96,14 @@ interface ThreadDetailsPanelProps extends Pick<
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   usage: ThreadDetailsUsageInput;
+  taskList?: TaskListPlan | null;
+  currentTaskRunId?: RunId | null;
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   const visible = useClientSettings(resolveThreadDetailsVisibility);
   const gt = useGT();
+  const taskList = props.isServerThread && !props.draftId ? props.taskList : null;
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const fileScripts = useT3ProjectFileScripts(
     props.environmentId,
@@ -158,9 +164,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
       threadRef={{ environmentId: props.environmentId, threadId: props.threadId }}
       anchor={props.anchor}
       handle={props.handle}
-      contentKey={THREAD_DETAILS_ITEMS.filter((item) => visible[item.id])
-        .map((item) => item.id)
-        .join(",")}
+      contentKey={[
+        ...THREAD_DETAILS_ITEMS.filter((item) => visible[item.id]).map((item) => item.id),
+        ...(taskList ? ["tasks"] : []),
+      ].join(",")}
       onContextMenu={(event) => {
         // Popups the card opens bubble here through React; they, fields, links, and selected text
         // keep their own menus.
@@ -300,6 +307,16 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                     ) : null}
                   </div>
                 </ThreadDetailsSection>
+              ) : null}
+
+              {taskList ? (
+                <ThreadDetailsTasks
+                  key={`${props.environmentId}:${props.threadId}`}
+                  plan={taskList}
+                  historical={
+                    props.currentTaskRunId != null && props.currentTaskRunId !== taskList.runId
+                  }
+                />
               ) : null}
 
               {density === "full" && !props.draftId && visible.servers ? (

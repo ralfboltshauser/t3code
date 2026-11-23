@@ -30,6 +30,7 @@ import {
   deriveTimelineEntriesFromVisibleTurnItemsWithState,
   deriveRevertTurnCountByUserMessageId,
   derivePhase,
+  findLatestTaskList,
   findRevertCheckpoint,
   isLatestRunSettled,
   selectHandoffImageResources,
@@ -37,6 +38,7 @@ import {
   createMessageAttachmentPreviewProjector,
   providerErrorPresentation,
   type TimelineEntry,
+  type TaskListPlan,
   workEntryIndicatesToolFailure,
   workEntryDisplayIndicatesToolFailure,
   workEntryIndicatesToolSuccess,
@@ -66,6 +68,27 @@ function streamingPlanArtifact(
 }
 
 describe("V2 session presentation", () => {
+  it("uses the latest run's checklist even when plan IDs are unordered or the list was cleared", () => {
+    const firstRun = { id: RunId.make("first"), ordinal: 1 };
+    const nextRun = { id: RunId.make("next"), ordinal: 2 };
+    const older: TaskListPlan = {
+      kind: "todo_list",
+      id: PlanId.make("z-older"),
+      threadId: ThreadId.make("thread"),
+      runId: firstRun.id,
+      nodeId: NodeId.make("task-list"),
+      status: "active",
+      steps: [{ id: "inspect", text: "Inspect files", status: "completed" }],
+    };
+    const newer = { ...older, id: PlanId.make("a-newer"), runId: nextRun.id };
+    const plans = [newer, older];
+    const runs = [nextRun, firstRun];
+
+    expect(findLatestTaskList({ plans, runs })).toBe(newer);
+    const cleared = { ...newer, id: PlanId.make("cleared"), steps: [] };
+    expect(findLatestTaskList({ plans: [...plans, cleared], runs })).toBeNull();
+  });
+
   it("uses run status as the settlement boundary", () => {
     const runId = RunId.make("run-1");
     expect(

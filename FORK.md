@@ -27,6 +27,23 @@ feature. Daily maintenance inspects upstream without publishing.
 
 ## Intentional differences
 
+The web and desktop Thread details card shows **Agent tasks** whenever the thread
+has a nonempty provider checklist. The section opens expanded, can be collapsed,
+and stays collapsed through live updates. When it displays a checklist from an
+earlier run, its title reads **Last checklist**. Keep the list scrollable so
+expanding it does not push the workspace controls out of the compact layout.
+
+Reuse the existing thread projection in `ChatView.tsx`, `session-logic.ts` and
+`chat/ThreadDetails{Panel,Card,Tasks}.tsx`. Reconcile with upstream PR #29705 while
+preserving automatic visibility and default expansion. Verify ordering and empty-list
+replacement, disclosure and counts, and run a real web client with Replay's
+`todo-list` scenario to verify the checklist reaches the card.
+
+```sh
+vp test run apps/web/src/session-logic.test.ts apps/web/src/components/chat/ThreadDetailsPanel.browser.test.tsx
+vp run i18n:check
+```
+
 Idle independent chats can move to a linked machine through `/move`, the web chat
 menu or palette, and the native move screen. Move recent portable text and captured
 Git work into an operation-owned destination worktree, with optional continuation;

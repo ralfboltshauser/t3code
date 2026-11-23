@@ -1,6 +1,9 @@
 import {
   EnvironmentId,
+  NodeId,
+  PlanId,
   ProjectId,
+  RunId,
   ThreadId,
   type ScopedThreadRef,
   type ThreadPullRequestLink,
@@ -87,6 +90,7 @@ import { PopoverCreateHandle } from "../ui/popover";
 import { ChatCanvasContext } from "./ChatCanvasContext";
 import { resolveChatCanvasLayout } from "./chatCanvasLayout";
 import { ThreadDetailsPanel } from "./ThreadDetailsPanel";
+import type { TaskListPlan } from "../../session-logic";
 
 const threadRef: ScopedThreadRef = {
   environmentId: EnvironmentId.make("environment"),
@@ -125,7 +129,15 @@ function setup(input: {
   };
 }
 
-function Panel({ fixture }: { fixture: ReturnType<typeof setup> }) {
+function Panel({
+  fixture,
+  taskList,
+  activeRunId = null,
+}: {
+  fixture: ReturnType<typeof setup>;
+  taskList?: TaskListPlan;
+  activeRunId?: RunId | null;
+}) {
   const noop = () => {};
   const scriptResult = async () => ({ ok: true }) as never;
   return (
@@ -172,11 +184,54 @@ function Panel({ fixture }: { fixture: ReturnType<typeof setup> }) {
         onAddProjectScript={scriptResult}
         onUpdateProjectScript={scriptResult}
         onDeleteProjectScript={scriptResult}
+        taskList={taskList ?? null}
+        currentTaskRunId={activeRunId}
         usage={{} as never}
       />
     </ChatCanvasContext>
   );
 }
+
+it("opens the checklist when tasks arrive and keeps a manually collapsed list collapsed", async () => {
+  using fixture = setup({ workspaceRoot: "/work/plain", folder: "/work/plain" });
+  const runId = RunId.make("run");
+  const plan: TaskListPlan = {
+    id: PlanId.make("tasks"),
+    threadId: threadRef.threadId,
+    runId,
+    nodeId: NodeId.make("tasks"),
+    kind: "todo_list",
+    status: "active",
+    steps: [
+      { id: "inspect", text: "Inspect files", status: "completed" },
+      { id: "test", text: "Run tests", status: "running" },
+    ],
+  };
+  await using screen = await render(<Panel fixture={fixture} />);
+  const tasks = page.getByRole("button", { name: /Agent tasks/ });
+  await expect.element(tasks).not.toBeInTheDocument();
+
+  await screen.rerender(<Panel fixture={fixture} taskList={plan} activeRunId={runId} />);
+  await expect.element(tasks).toHaveAttribute("aria-expanded", "true");
+  await expect.element(page.getByText("Run tests", { exact: false })).toBeVisible();
+  await tasks.click();
+  await expect.element(tasks).toHaveAttribute("aria-expanded", "false");
+
+  await screen.rerender(
+    <Panel
+      fixture={fixture}
+      taskList={{
+        ...plan,
+        steps: plan.steps.map((step) => ({ ...step, status: "completed" })),
+      }}
+      activeRunId={RunId.make("next")}
+    />,
+  );
+  const lastChecklist = page.getByRole("button", { name: /Last checklist.*2 of 2 completed/ });
+  await expect.element(lastChecklist).toHaveAttribute("aria-expanded", "false");
+  await lastChecklist.click();
+  await expect.element(page.getByText("Run tests", { exact: false })).toBeVisible();
+});
 
 it("offers no git controls in a No project thread, but shows its linked pull request", async () => {
   using fixture = setup({

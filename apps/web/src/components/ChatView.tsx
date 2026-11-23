@@ -166,6 +166,7 @@ import {
   derivePhase,
   deriveActiveWorkStartedAt,
   deriveCanInterruptRunningThread,
+  findLatestTaskList,
   findRevertCheckpoint,
   isLatestRunSettled,
 } from "../session-logic";
@@ -4128,6 +4129,8 @@ export default function ChatView(props: ChatViewProps) {
                   onAddProjectScript={saveProjectScriptStable}
                   onUpdateProjectScript={updateProjectScriptStable}
                   onDeleteProjectScript={deleteProjectScriptStable}
+                  taskList={findLatestTaskList(serverProjection)}
+                  currentTaskRunId={activeRuntime?.activeRunId ?? activeActivityRun?.runId ?? null}
                   usage={{
                     providerInstanceId: activeProviderInstanceId,
                     model: activeUsageModel,

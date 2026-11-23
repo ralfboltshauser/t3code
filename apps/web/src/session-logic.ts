@@ -1,4 +1,4 @@
-import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
+import type { ThreadStructure, ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
 import { msg } from "gt-react";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import {
@@ -237,6 +237,30 @@ export function derivePendingUserInputs(
   inputs: ReadonlyArray<ThreadPendingUserInput>,
 ): ThreadPendingUserInput[] {
   return [...inputs].toSorted((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
+export type TaskListPlan = Extract<OrchestrationV2PlanArtifact, { readonly kind: "todo_list" }>;
+
+export function findLatestTaskList(
+  projection: {
+    runs: ReadonlyArray<Pick<ThreadStructure["runs"][number], "id" | "ordinal">>;
+    plans: ThreadStructure["plans"];
+  } | null,
+): TaskListPlan | null {
+  if (projection === null) return null;
+  const runOrdinals = new Map(projection.runs.map((run) => [run.id, run.ordinal]));
+  let latest: TaskListPlan | null = null;
+  let latestOrdinal = -1;
+  for (const plan of projection.plans) {
+    if (plan.kind !== "todo_list" || plan.status === "superseded") continue;
+    const ordinal = plan.runId === null ? -1 : (runOrdinals.get(plan.runId) ?? -1);
+    // The thread projection orders same-run replacements with the newest list last.
+    if (ordinal >= latestOrdinal) {
+      latest = plan;
+      latestOrdinal = ordinal;
+    }
+  }
+  return latest && latest.steps.length > 0 ? latest : null;
 }
 
 const STANDALONE_V2_ITEM_TYPES = new Set<OrchestrationV2ProjectedTurnItem["item"]["type"]>([
