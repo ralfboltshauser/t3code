@@ -3603,17 +3603,30 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
   // A steer still pending after its run ended was never read: the provider marks one it read
   // completed, and one Stop dropped cancelled. It runs next, in its place among waiting messages.
-  // A run completes before its turn-end checkpoint capture. Steers and queued turns advance when
-  // the capture commits and repeats the update, after the deliveries ahead of it on the lane.
-  const awaitsCheckpointCapture = (run: OrchestrationV2Run) =>
-    run.status !== "completed" || run.checkpointId !== null
-      ? Effect.succeed(false)
-      : effectOutbox.get(`effect:checkpoint.capture:${run.id}`).pipe(
-          Effect.map(
-            Option.exists((effect) => effect.status === "pending" || effect.status === "running"),
-          ),
-          Effect.orElseSucceed(() => false),
-        );
+  // Let the effect lane finish earlier deliveries when the provider completed before capture.
+  const awaitsCheckpointCapture = Effect.fn("Orchestrator.awaitsCheckpointCapture")(function* (
+    run: OrchestrationV2Run,
+  ) {
+    if (run.checkpointId !== null || (run.status !== "completed" && run.status !== "interrupted"))
+      return false;
+    const pending = yield* effectOutbox.get(`effect:checkpoint.capture:${run.id}`).pipe(
+      Effect.map(
+        Option.exists((effect) => effect.status === "pending" || effect.status === "running"),
+      ),
+      Effect.orElseSucceed(() => false),
+    );
+    if (!pending || run.status === "completed") return pending;
+    if (run.activeAttemptId === null || run.rootNodeId === null) return false;
+    // A Stop can interrupt the run even though its provider turn completed normally.
+    const { providerTurns } = yield* projectionStore
+      .getThreadRecords(run.threadId, ["providerTurns"], {
+        providerTurnAttemptIds: [run.activeAttemptId],
+      })
+      .pipe(Effect.orElseSucceed(() => ({ providerTurns: [] })));
+    return providerTurns.some(
+      (turn) => turn.nodeId === run.rootNodeId && turn.status === "completed",
+    );
+  });
 
   const awaitLatestRunCapture = Effect.fn("Orchestrator.awaitLatestRunCapture")(
     function* (threadId: ThreadId) {

@@ -31,6 +31,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
@@ -1448,10 +1449,10 @@ it.effect.each(["complete", "stop-before-end"] as const)(
             (event) =>
               event.type === "run.updated" &&
               event.payload.id === first.runId &&
-              event.payload.status === "completed",
+              (event.payload.status === "completed" || event.payload.status === "interrupted"),
           ),
-          Stream.take(1),
-          Stream.runDrain,
+          Stream.map((event) => (event.type === "run.updated" ? event.payload.status : null)),
+          Stream.runHead,
           Effect.forkScoped,
         );
         const turn = (yield* orchestrator.getThreadProjection(threadId)).providerTurns[0]!;
@@ -1470,7 +1471,10 @@ it.effect.each(["complete", "stop-before-end"] as const)(
           failure: null,
           threadDisposition: "reusable",
         });
-        yield* Fiber.join(settled);
+        assert.equal(
+          Option.getOrNull(yield* Fiber.join(settled)),
+          timing === "stop-before-end" ? "interrupted" : "completed",
+        );
         yield* worker.drain();
         if (timing === "stop-before-end") {
           const queued = (yield* orchestrator.getThreadProjection(threadId)).runs
@@ -3473,15 +3477,15 @@ it.effect(
         });
         const draining = yield* worker.drain().pipe(Effect.forkScoped);
         yield* Deferred.await(interruptReached);
-        const waiting = yield* orchestrator.streamDomainEvents.pipe(
+        const terminal = yield* orchestrator.streamDomainEvents.pipe(
           Stream.filter(
             (event) =>
               event.type === "run.updated" &&
               event.payload.id === first.runId &&
-              event.payload.status === "waiting",
+              (event.payload.status === "completed" || event.payload.status === "interrupted"),
           ),
-          Stream.take(1),
-          Stream.runDrain,
+          Stream.map((event) => (event.type === "run.updated" ? event.payload.status : null)),
+          Stream.runHead,
           Effect.forkScoped,
         );
         const turn = (yield* orchestrator.getThreadProjection(threadId)).providerTurns[0]!;
@@ -3500,7 +3504,7 @@ it.effect(
           failure: null,
           threadDisposition: "reusable",
         });
-        yield* Fiber.join(waiting);
+        assert.equal(Option.getOrNull(yield* Fiber.join(terminal)), "interrupted");
         yield* Deferred.succeed(releaseInterrupt, undefined);
         yield* Fiber.join(draining);
         yield* worker.drain();

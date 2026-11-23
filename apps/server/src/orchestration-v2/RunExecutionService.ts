@@ -1338,7 +1338,7 @@ export const layer: Layer.Layer<
                       writeIfRunCurrent: {
                         activeAttemptId: input.attempt.id,
                         expectedStatus: "running" as const,
-                        unlessInterruptRequested: settledTerminal !== terminal,
+                        unlessInterruptRequested: settledTerminal.status === "completed",
                       },
                     }),
                 ...(input.hasUnpairedRunInterruptRequest === undefined
@@ -1370,8 +1370,19 @@ export const layer: Layer.Layer<
           // as interrupted. The completed write refuses in the same transaction
           // as a stored Stop request, so a racing Stop stays authoritative.
           const handedOff = terminal.status === "interrupted" && (yield* workspaceHandedOff);
-          if (!handedOff || !(yield* writeTerminal({ ...terminal, status: "completed" }))) {
-            yield* writeTerminal(terminal);
+          const settledTerminal = handedOff
+            ? { ...terminal, status: "completed" as const }
+            : terminal;
+          if (!(yield* writeTerminal(settledTerminal))) {
+            if (handedOff) {
+              yield* writeTerminal(terminal);
+            } else if (
+              terminal.status === "completed" &&
+              input.hasUnpairedRunInterruptRequest !== undefined &&
+              (yield* input.hasUnpairedRunInterruptRequest())
+            ) {
+              yield* writeTerminal({ ...terminal, status: "interrupted" });
+            }
           }
           if (isRunOwnedSubagentTerminalStatus(terminal.status) && !childTurnsContinue(terminal)) {
             yield* Ref.set(openRunOwnedSubagents, emptyOpenRunOwnedSubagentProjection());
