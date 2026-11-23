@@ -365,49 +365,56 @@ fs.readFileSync = (file, ...rest) => {
           "#!/t3-test-missing-loader\n",
           '#!/bin/sh\necho "runtime loader failed" >&2\nexit 42\n',
           "#!/bin/sh\nkill -TERM $$\n",
-          '#!/bin/sh\ntrap \'echo caught > "$T3CODE_TEST_TERM"; exit 42\' TERM\necho ready > "$T3CODE_TEST_READY"\nwhile :; do :; done\n',
+          null,
         ]) {
           const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-validation-test-" });
           const output = yield* buildNpmLauncher({
             version: VERSION,
             outputDir: path.join(root, "out"),
           });
-          const release = yield* serveFakeRelease(root, executable);
+          const release = yield* serveFakeRelease(root, executable ?? undefined);
           const home = path.join(root, "home");
           const dir = path.join(home, "runtime/versions", VERSION);
-          const probeTimeoutHook = path.join(root, "probe-timeout.mjs");
-          yield* fs.writeFileString(
-            probeTimeoutHook,
-            `import childProcess from "node:child_process";
+          const launcher = path.join(output.packageDir, "bin/t3.mjs");
+          const args = [launcher, "serve"];
+          if (executable === null) {
+            // A child can miss its entire timeout before the OS schedules it on a busy runner.
+            const probeTimeoutHook = path.join(root, "probe-timeout.mjs");
+            yield* fs.writeFileString(
+              probeTimeoutHook,
+              `import assert from "node:assert/strict";
+import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 const { spawnSync } = childProcess;
-childProcess.spawnSync = (command, args, options) => spawnSync(command, args,
-  options?.timeout === undefined ? options : { ...options, timeout: 500 });
+childProcess.spawnSync = (command, args, options) => {
+  if (args?.[0] !== "--version") return spawnSync(command, args, options);
+  assert.ok(Number.isFinite(options.timeout) && options.timeout > 0);
+  assert.equal(options.killSignal, "SIGKILL");
+  return {
+    status: null,
+    signal: "SIGKILL",
+    error: Object.assign(new Error("runtime probe timed out"), { code: "ETIMEDOUT" }),
+  };
+};
 syncBuiltinESMExports();
 `,
-          );
+            );
+            args.unshift("--import", probeTimeoutHook);
+          }
           const env = {
             PATH: (yield* HostProcess.Environment).PATH,
             T3CODE_HOME: home,
             T3CODE_RELEASE_BASE_URL: release.baseUrl,
-            T3CODE_TEST_READY: path.join(root, "probe-ready"),
-            T3CODE_TEST_TERM: path.join(root, "probe-term"),
           };
-          const launcher = path.join(output.packageDir, "bin/t3.mjs");
-          const failed = yield* run(
-            process.execPath,
-            ["--import", probeTimeoutHook, launcher, "serve"],
-            { cwd: root, env },
-          );
+          const failed = yield* run(process.execPath, args, { cwd: root, env });
           assert.equal(failed.exitCode, 1, failed.stderr);
           assert.deepStrictEqual(yield* fs.readDirectory(path.dirname(dir)), [], failed.stderr);
           assert.include(failed.stderr, "could not run");
-          if (executable.includes("runtime loader failed")) {
+          if (executable?.includes("runtime loader failed")) {
             assert.include(failed.stderr, "runtime loader failed");
           }
-          if (executable.includes("trap")) {
-            assert.isTrue(yield* fs.exists(env.T3CODE_TEST_READY));
-            assert.isFalse(yield* fs.exists(env.T3CODE_TEST_TERM));
+          if (executable === null) {
+            assert.include(failed.stderr, "runtime probe timed out");
           }
           if ((yield* HostProcess.Platform) === "linux") {
             assert.include(failed.stderr, "glibc");
