@@ -267,3 +267,21 @@ it("settles the side chat from its composer and conversation, without settling t
   await userEvent.keyboard("{Control>}{Shift>}E{/Shift}{/Control}");
   expect(settled).toEqual(["side", "side"]);
 });
+
+it("leaves keys to a focused video player with controls", async () => {
+  const composerKeys: string[] = [];
+  await using _screen = await render(
+    <>
+      <Chat composerKeys={composerKeys} />
+      <video ref={focusOnMount} controls />
+    </>,
+    options,
+  );
+
+  await userEvent.keyboard(" m");
+  expect(composerKeys).toEqual([]);
+
+  (document.activeElement as HTMLElement).blur();
+  await userEvent.keyboard("a");
+  expect(composerKeys).toEqual(["a"]);
+});

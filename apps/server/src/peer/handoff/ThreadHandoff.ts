@@ -276,6 +276,8 @@ const make = Effect.gen(function* () {
   });
   const options = Effect.fn("ThreadHandoff.options")(function* (threadId: ThreadId) {
     const { thread } = yield* read(threadId);
+    if (thread.workflowRun !== undefined)
+      return yield* failure("This chat belongs to a workflow and must stay on its machine.");
     const listed = yield* links.list.pipe(
       Effect.mapError((cause) => failure("Could not load linked machines.", cause)),
     );
@@ -557,6 +559,8 @@ const make = Effect.gen(function* () {
         const thread = records.thread;
         if (thread.handoff?.state === "failed") yield* pruneResolved(thread.handoff);
         if (thread.handoff && thread.handoff.state !== "failed") return thread.handoff;
+        if (thread.workflowRun !== undefined)
+          return yield* failure("This chat belongs to a workflow and must stay on its machine.");
         if (
           thread.archivedAt ||
           thread.deletedAt ||

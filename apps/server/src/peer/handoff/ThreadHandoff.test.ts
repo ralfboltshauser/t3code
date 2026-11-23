@@ -47,6 +47,7 @@ it.effect.each([
   "owned-receipt",
   "refused",
   "interrupted-capture",
+  "workflow-step",
 ] as const)("a %s preserves the original move identity and ownership", (outcome) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -84,7 +85,19 @@ it.effect.each([
           }
         : {}),
     };
-    let projection = idleThreadProjection(shell);
+    let projection = idleThreadProjection({
+      ...shell,
+      ...(outcome === "workflow-step"
+        ? {
+            workflowRun: {
+              environmentId: here.environmentId,
+              runId: "workflow-run",
+              workflow: "build",
+              step: "agent",
+            },
+          }
+        : {}),
+    });
     let handoff: OrchestrationV2ThreadHandoff | undefined;
     const sent = yield* Deferred.make<void>();
     const capturing = yield* Deferred.make<void>();
@@ -241,6 +254,15 @@ it.effect.each([
     );
     yield* Effect.gen(function* () {
       const service = yield* ThreadHandoff.ThreadHandoff;
+      if (outcome === "workflow-step") {
+        const problem = yield* service
+          .start({ threadId: id, environmentId: there.environmentId })
+          .pipe(Effect.flip);
+        assert.include(problem.message, "workflow");
+        assert.isUndefined(handoff);
+        assert.lengthOf(requests, 0);
+        return;
+      }
       if (outcome === "interrupted-capture") {
         const running = yield* service
           .start({ threadId: id, environmentId: there.environmentId })

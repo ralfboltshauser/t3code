@@ -50,7 +50,8 @@ Git work into an operation-owned destination worktree, with optional continuatio
 blank moves never start a provider turn. Keep the source fenced during uncertainty,
 replay the original import/continuation receipt, retain exceptional source files, and use a fresh
 operation for return moves. No active/deferred self-handoff or implicit process,
-attachment, credential, goal, schedule or watch migration. Both servers advertise
+attachment, credential, goal, schedule or watch migration. Workflow-owned threads
+stay on the environment hosting the workflow run. Both servers advertise
 `threadHandoffProtocol: 1`; old clients remain subject to server fencing. Do not run
 an older server against threads with pending or completed moves: it lacks that fence.
 
