@@ -32,8 +32,8 @@ const SIDE_CHAT_PANE_COMMANDS: ReadonlySet<KeybindingCommand> = new Set([
 interface ChatShortcutsInput {
   readonly enabled: boolean;
   /**
-   * An embedded chat handles its own settle command throughout its pane and composer
-   * chords inside `composerElement`; window commands remain with the outer chat.
+   * An embedded side chat leaves window shortcuts to the outer chat. Its pane handles
+   * settle, find, and Escape to close find. Composer chords stay within the composer.
    */
   readonly embedded?: boolean;
   readonly composerElement?: HTMLElement | null;
@@ -109,46 +109,44 @@ export function useChatShortcuts(input: ChatShortcutsInput) {
       event.isComposing ||
       event.keyCode === 229 ||
       isCommandPaletteOpen() ||
-      isInSideChatPane(event.target)
+      isInSideChatPane(event.target) !== embedded
     )
       return;
     const context = input.getShortcutContext(event.target);
     if (context.terminalFocus || context.previewFocus || context.modelPickerOpen) return;
+    // The narrow right panel sheet closes on Escape and ignores defaultPrevented.
     event.preventDefault();
+    event.stopPropagation();
     input.closeThreadFind();
   });
-  const handleComposerShortcut = useEffectEvent((event: KeyboardEvent) => {
+  const handleSideChatShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (event.defaultPrevented || isCommandPaletteOpen()) return;
     const command = resolveChatShortcutCommand(event, input.keybindings, input.scriptKeybindings, {
       context: input.getShortcutContext(event.target),
     });
-    const inComposer = event.target instanceof Node && composerElement?.contains(event.target);
-    const run =
-      command === "thread.settle"
-        ? input.commands[command]
-        : command && inComposer
-          ? composerShortcutCommands(input.composerRef, input.branchToolbarRef)[command]
-          : undefined;
+    let run: ChatShortcutHandler | undefined;
+    if (command === "chat.find" || command === "thread.settle") run = input.commands[command];
+    else if (command && event.target instanceof Node && composerElement?.contains(event.target)) {
+      run = composerShortcutCommands(input.composerRef, input.branchToolbarRef)[command];
+    }
     if (!run || run({ event, terminalFocusOwner: null }) === false) return;
     event.preventDefault();
     event.stopPropagation();
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- attaches keydown listeners for chat shortcuts and find dismissal: on the window, or on an embedded chat's pane
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- attaches keydown listeners for chat shortcuts and find dismissal: on the window, or on an embedded chat's side chat pane
   useEffect(() => {
-    if (embedded) {
-      if (composerElement === null) return;
-      const onComposerKeyDown = (event: KeyboardEvent) => handleComposerShortcut(event);
-      const pane = composerElement.closest<HTMLElement>("[data-side-chat-pane]") ?? composerElement;
-      pane.addEventListener("keydown", onComposerKeyDown, true);
-      return () => pane.removeEventListener("keydown", onComposerKeyDown, true);
-    }
-    const onKeyDownCapture = (event: KeyboardEvent) => handleShortcut(event);
+    const target: Pick<HTMLElement, "addEventListener" | "removeEventListener"> | null = embedded
+      ? (composerElement?.closest<HTMLElement>("[data-side-chat-pane]") ?? null)
+      : window;
+    if (!target) return;
+    const onKeyDownCapture = (event: KeyboardEvent) =>
+      embedded ? handleSideChatShortcut(event) : handleShortcut(event);
     const onKeyDown = (event: KeyboardEvent) => dismissFind(event);
-    window.addEventListener("keydown", onKeyDownCapture, true);
-    window.addEventListener("keydown", onKeyDown);
+    target.addEventListener("keydown", onKeyDownCapture, true);
+    target.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("keydown", onKeyDownCapture, true);
-      window.removeEventListener("keydown", onKeyDown);
+      target.removeEventListener("keydown", onKeyDownCapture, true);
+      target.removeEventListener("keydown", onKeyDown);
     };
   }, [composerElement, embedded]);
 }
