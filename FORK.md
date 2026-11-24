@@ -46,6 +46,8 @@ uses `DesktopObservability.layerLocalOnly`. Mobile removes Expo Observe and
 disables upstream over-the-air JS updates so the official feed cannot reintroduce
 tracking. Keep the Clerk SDK telemetry opt-out on all three client surfaces and
 the native iOS and Android opt-out in the Clerk Expo native components patch.
+Welcome and About link to the privacy policy without claiming the personal app
+collects usage data.
 
 Check that configured analytics and trace endpoints receive no requests, that
 pairing and DPoP ticket URLs carry no analytics metadata, and that native builds

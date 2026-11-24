@@ -2585,11 +2585,7 @@ export function AboutSettingsPanel() {
       <SettingsSection id="legal" title={gt("Legal")}>
         <SettingsRow
           {...setting("privacy-policy")}
-          description={
-            telemetryOff === undefined
-              ? gt("How we handle your data, including the anonymous usage data T3 Code collects.")
-              : gt("How we handle your data. {telemetryOff}", { telemetryOff })
-          }
+          description={telemetryOff}
           control={
             <Button
               render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
