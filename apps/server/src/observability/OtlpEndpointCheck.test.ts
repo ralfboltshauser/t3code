@@ -71,6 +71,18 @@ const check = (input: Parameters<OtlpEndpointCheck.OtlpEndpointCheck["Service"][
   });
 
 describe("OtlpEndpointCheck", () => {
+  it.effect("does not contact a collector in the personal server", () => {
+    const { requests, layer } = checkWith(200, { disableOutboundTelemetry: true });
+    return Effect.gen(function* () {
+      const result = yield* check({
+        signal: "traces",
+        url: "https://collector.example.com/v1/traces",
+      });
+      assert.deepEqual(result, { _tag: "Unreachable", timedOut: false });
+      assert.deepEqual(requests, []);
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("keeps T3 credentials paired with each running signal endpoint", () => {
     const signalExport = { ...DEFAULT_SIGNAL_EXPORT, headers: { "x-api-key": "secret" } };
     const { requests, layer } = checkWith(200, {

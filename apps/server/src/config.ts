@@ -85,6 +85,7 @@ export class ServerConfig extends Context.Service<
     readonly otlpLogsSource?: OtlpEndpointSource;
     readonly otlpLogsVariable?: string;
     readonly otelEnvironment: OtelEnvironment.OtelEnvironment;
+    readonly disableOutboundTelemetry?: true;
     readonly mode: RuntimeMode;
     readonly port: number;
     readonly host: string | undefined;

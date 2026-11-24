@@ -1,4 +1,3 @@
-import Constants from "expo-constants";
 import { type ReleaseChannel, releaseResourceAttributes } from "@t3tools/shared/releaseResource";
 import * as RelayTracing from "@t3tools/shared/relayTracing";
 
@@ -46,11 +45,4 @@ export function layerFromConfig(config: TracingConfig | null, resource: TracingR
   });
 }
 
-export const layer = layerFromConfig(resolveTracingConfig(), {
-  serviceVersion: Constants.expoConfig?.version,
-  serviceInstanceId: Constants.sessionId,
-  appVariant:
-    typeof Constants.expoConfig?.extra?.appVariant === "string"
-      ? Constants.expoConfig.extra.appVariant
-      : "unknown",
-});
+export const layer = RelayTracing.layerDisabled;

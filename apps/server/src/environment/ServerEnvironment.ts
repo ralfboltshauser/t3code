@@ -307,14 +307,17 @@ export const make = Effect.gen(function* () {
       mcpHostedApproval: true,
       shellThreadFamilies: true,
       shellOlderSettled: true,
-      agentFeedback: true,
+      agentFeedback: serverConfig.disableOutboundTelemetry !== true,
     },
   };
 
   return ServerEnvironment.of({
     getEnvironmentId: Effect.succeed(environmentId),
     // Publishing opt-in and relay links change at runtime; read the capability per request.
-    getDescriptor: readAgentActivityPublishingActive(secrets).pipe(
+    getDescriptor: (serverConfig.disableOutboundTelemetry === true
+      ? Effect.succeed(false)
+      : readAgentActivityPublishingActive(secrets)
+    ).pipe(
       Effect.map((agentActivityPublishing) => ({
         ...descriptor,
         capabilities: { ...descriptor.capabilities, agentActivityPublishing },

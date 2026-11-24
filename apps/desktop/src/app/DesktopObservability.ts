@@ -14,6 +14,7 @@ import {
   parsePersistedServerObservabilitySettings,
   type PersistedServerObservabilitySettings,
 } from "@t3tools/shared/serverSettings";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -701,4 +702,12 @@ export const layer = Layer.mergeAll(
   Layer.succeed(References.MinimumLogLevel, "Info"),
   Layer.succeed(Tracer.MinimumTraceLevel, "Info"),
   Layer.succeed(References.TracerTimingEnabled, true),
+);
+
+export const layerLocalOnly = layer.pipe(
+  Layer.provide(
+    ConfigProvider.layerAdd(ConfigProvider.fromEnv({ env: { T3CODE_OTEL_SDK_DISABLED: "true" } }), {
+      asPrimary: true,
+    }),
+  ),
 );

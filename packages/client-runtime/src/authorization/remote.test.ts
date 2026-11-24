@@ -3,7 +3,6 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { EnvironmentAuthInvalidError } from "@t3tools/contracts";
-import { hashTelemetryId } from "@t3tools/shared/telemetryId";
 import {
   bootstrapRemoteBearerSession,
   exchangeRemoteDpopAccessToken,
@@ -207,9 +206,7 @@ describe("remote environment authorization", () => {
         connectionMethod: "relay",
       }).pipe(provideRemoteHttp(fetch.fetchFn));
 
-      expect(url).toBe(
-        "wss://remote.example.com/ws?wsTicket=ws-ticket&clientSurface=mobile&clientAppVersion=1.2.3&clientDeviceType=phone&clientOs=Android&clientOsMajorVersion=15&clientDeviceModel=Pixel+9&connectionMethod=relay",
-      );
+      expect(url).toBe("wss://remote.example.com/ws?wsTicket=ws-ticket");
     }),
   );
 
@@ -244,9 +241,7 @@ describe("remote environment authorization", () => {
         },
         { method: "GET", url: "https://remote.example.com/ws", accessToken: "ws-ticket" },
       ]);
-      expect(url).toBe(
-        "wss://remote.example.com/ws?wsTicket=ws-ticket&dpop=proof-2&connectionMethod=relay",
-      );
+      expect(url).toBe("wss://remote.example.com/ws?wsTicket=ws-ticket&dpop=proof-2");
     }),
   );
 
@@ -314,7 +309,7 @@ describe("remote environment authorization", () => {
     }),
   );
 
-  it.effect("names the signed-in Connect account and this device by hash only", () =>
+  it.effect("omits analytics owner identifiers from a signed-in connection", () =>
     Effect.gen(function* () {
       const fetch = recordedFetch(
         Response.json({ ticket: "ws-ticket", expiresAt: "2026-05-01T12:05:00.000Z" }),
@@ -334,14 +329,11 @@ describe("remote environment authorization", () => {
               clerkToken: Effect.succeed("clerk-token"),
             }),
           ),
-          Effect.provideService(ClientCapabilities.AnalyticsDevice, {
-            id: Effect.succeedSome("device-1"),
-          }),
         ),
       );
 
-      expect(url.searchParams.get("clientOwner")).toBe(hashTelemetryId("user_connect"));
-      expect(url.searchParams.get("clientDevice")).toBe(hashTelemetryId("device-1"));
+      expect(url.searchParams.get("clientOwner")).toBeNull();
+      expect(url.searchParams.get("clientDevice")).toBeNull();
       expect(url.toString()).not.toContain("user_connect");
       expect(url.toString()).not.toContain("device-1");
     }),

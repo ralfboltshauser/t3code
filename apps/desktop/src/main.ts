@@ -157,7 +157,7 @@ const layerDesktopFoundation = Layer.mergeAll(
   DesktopConnectionCatalogStore.layer.pipe(Layer.provideMerge(DesktopSavedEnvironments.layer)),
   DesktopAssets.layer,
   DesktopPrimaryPaste.layer,
-  DesktopObservability.layer,
+  DesktopObservability.layerLocalOnly,
   DesktopRendererHistory.layer,
   AppleSpeech.layer,
 ).pipe(Layer.provideMerge(layerDesktopEnvironment));

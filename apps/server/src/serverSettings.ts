@@ -714,7 +714,7 @@ function foldLegacyProjectSettings(
 }
 
 const make = Effect.gen(function* () {
-  const { settingsPath } = yield* ServerConfig.ServerConfig;
+  const { settingsPath, disableOutboundTelemetry } = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
@@ -725,11 +725,15 @@ const make = Effect.gen(function* () {
     summary: managedPolicy,
   } = yield* ManagedPolicy.ManagedPolicy;
   // Locks are laid over every settings value that leaves this service, never persisted.
-  const toEffective = (settings: ServerSettings) =>
-    resolveTextGenerationProvider(
+  const toEffective = (settings: ServerSettings) => {
+    const effective = resolveTextGenerationProvider(
       managedProviders.applyLimits(managed.applyLocks(settings)),
       managedProviders.isDriverAllowed,
     );
+    return disableOutboundTelemetry === true
+      ? { ...effective, agentFeedback: { ...effective.agentFeedback, mode: "off" as const } }
+      : effective;
+  };
   const writeSemaphore = yield* Semaphore.make(1);
   const cacheKey = "settings" as const;
   const changesPubSub = yield* PubSub.unbounded<ServerSettings>();

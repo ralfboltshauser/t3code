@@ -302,7 +302,7 @@ describe("DesktopObservability", () => {
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("stops every export when the OpenTelemetry SDK is disabled", () => {
+  it.effect("keeps personal desktop traces and logs local with configured collectors", () => {
     const requests: Array<ExportedRequest> = [];
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -318,7 +318,9 @@ describe("DesktopObservability", () => {
       yield* Effect.scoped(
         Effect.logInfo("desktop log stays local when disabled").pipe(
           Effect.withSpan("desktop-disabled-test"),
-          Effect.provide(DesktopObservability.layer.pipe(Layer.provideMerge(layerEnvironment))),
+          Effect.provide(
+            DesktopObservability.layerLocalOnly.pipe(Layer.provideMerge(layerEnvironment)),
+          ),
         ),
       );
 
@@ -329,7 +331,7 @@ describe("DesktopObservability", () => {
         Layer.mergeAll(
           NodeServices.layer,
           layerCollector(requests),
-          ConfigProvider.layer(ConfigProvider.fromEnv({ env: { OTEL_SDK_DISABLED: "true" } })),
+          ConfigProvider.layer(ConfigProvider.fromEnv({ env: { OTEL_SDK_DISABLED: "false" } })),
         ),
       ),
     );

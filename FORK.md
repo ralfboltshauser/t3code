@@ -27,6 +27,36 @@ feature. Daily maintenance inspects upstream without publishing.
 
 ## Intentional differences
 
+Personal builds do not collect or send T3 product analytics, identify provider
+accounts for analytics, export relay traces or remote OpenTelemetry diagnostics,
+send agent feedback, or publish agent activity for cloud notifications.
+The server uses disabled analytics, relay-tracing and activity layers and clears
+remote collector destinations at launch. Feedback is effectively Off even when
+an older settings file enables it. Keep local tracing, usage accounting and
+provider authentication. Keep direct, linked and T3 Connect connections as
+transport choices. T3 Connect and model providers still receive the requests
+necessary to provide their services.
+
+Preserve the disabled production layers in `apps/server/src/server.ts`,
+`cli/connect.ts`, `apps/web/src/lib/runtime.ts`, and mobile
+`features/observability/tracing.ts`. Do not restore identity reads in server
+startup or Codex sign-in, or analytics WebSocket parameters and device storage
+in `packages/client-runtime` and the platform adapters. The desktop main process
+uses `DesktopObservability.layerLocalOnly`. Mobile removes Expo Observe and
+disables upstream over-the-air JS updates so the official feed cannot reintroduce
+tracking. Keep the Clerk SDK telemetry opt-out on all three client surfaces and
+the native iOS and Android opt-out in the Clerk Expo native components patch.
+
+Check that configured analytics and trace endpoints receive no requests, that
+pairing and DPoP ticket URLs carry no analytics metadata, and that native builds
+neither include Observe nor take upstream OTA updates. Inspect the Diagnostics
+screen in a rebuilt native client and confirm local diagnostics remain available
+where supported.
+
+```sh
+vp test run apps/server/src/telemetry/AnalyticsService.test.ts apps/server/src/cloud/CloudLink.test.ts apps/server/src/observability/OtlpEndpointCheck.test.ts apps/desktop/src/app/DesktopObservability.test.ts apps/web/src/lib/runtime.test.ts packages/client-runtime/src/authorization/remote.test.ts packages/client-runtime/src/connection/resolver.test.ts apps/mobile/src/features/observability/tracing.test.ts apps/mobile/app.config.test.ts apps/mobile/src/features/cloud/CloudAuthProvider.test.ts
+```
+
 The web and desktop Thread details card shows **Agent tasks** whenever the thread
 has a nonempty provider checklist. The section opens expanded, can be collapsed,
 and stays collapsed through live updates. When it displays a checklist from an

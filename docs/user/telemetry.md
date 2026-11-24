@@ -1,3 +1,25 @@
+# Privacy in T3 Code Personal
+
+Personal builds keep product analytics and diagnostics on your device.
+They disable product usage reporting, provider-account attribution for analytics,
+relay tracing, remote OpenTelemetry exports, agent feedback delivery, and mobile
+crash uploads. Agent activity publishing to the T3 Connect relay is disabled, so
+cloud push notifications and Live Activities that depend on it are unavailable.
+Personal mobile builds also disable Expo over-the-air updates. Install a rebuilt
+personal app to update.
+
+Local logs, resource measurements, and provider token accounting remain available.
+Use the personal web or desktop client and a personal mobile build for this
+behavior. Hosted clients and previously installed builds follow their own settings.
+
+Connections to T3 Connect, model providers, Git hosts, update sources and other
+services still send the requests those services need. For remote access without
+T3 Connect, pair directly over your LAN or private network.
+
+## Upstream builds
+
+The behavior and settings below apply to official T3 Code builds.
+
 # Product usage data
 
 The T3 Code server sends product usage events to T3 Code's own endpoint at `ingest.t3.codes`,

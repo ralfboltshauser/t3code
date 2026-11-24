@@ -2,10 +2,11 @@ import { expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import { vi } from "vite-plus/test";
 
 import { layerRemoteHttpClient } from "@t3tools/client-runtime/rpc";
-import { withRelayClientTracing } from "@t3tools/shared/relayTracing";
+import * as RelayTracing from "@t3tools/shared/relayTracing";
 
 import * as Tracing from "./tracing";
 
@@ -35,7 +36,7 @@ it.effect("does not let OTLP serialization failures alter application effects", 
   const layerTracedApplication = Layer.effectDiscard(
     Effect.fail(failure).pipe(
       Effect.withSpan("mobile.test.failed-span"),
-      withRelayClientTracing,
+      RelayTracing.withRelayClientTracing,
       Effect.exit,
       Effect.flatMap((exit) => {
         const reason = exit._tag === "Failure" ? exit.cause.reasons[0] : undefined;
@@ -60,3 +61,10 @@ it.effect("does not let OTLP serialization failures alter application effects", 
     ),
   );
 });
+
+it.effect("keeps the native runtime relay tracer disabled", () =>
+  Effect.gen(function* () {
+    const tracer = yield* RelayTracing.RelayClientTracer;
+    expect(Option.isNone(tracer)).toBe(true);
+  }).pipe(Effect.provide(Tracing.layer)),
+);

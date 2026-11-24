@@ -439,3 +439,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
     }),
   );
 });
+
+it.effect("drops all production analytics without an identity or an HTTP client", () =>
+  Effect.gen(function* () {
+    const analytics = yield* AnalyticsService.AnalyticsService;
+    assert.isFalse(yield* analytics.record("server.boot.heartbeat"));
+    yield* analytics.recordOwners([{ source: "openai", ownerId: "provider-account" }], "server");
+    yield* analytics.flush;
+  }).pipe(Effect.provide(AnalyticsService.layerDisabled)),
+);

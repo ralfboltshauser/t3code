@@ -28,6 +28,7 @@ import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import { constant } from "effect/Function";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -1004,4 +1005,9 @@ export const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(AgentAwarenessRelay, make);
+export const layerDisabled = Layer.succeed(AgentAwarenessRelay, {
+  publishThread: constant(Effect.void),
+  drain: Effect.void,
+  requestCatchUp: constant(Effect.void),
+  start: constant(Effect.void),
+});

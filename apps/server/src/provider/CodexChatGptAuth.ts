@@ -7,11 +7,8 @@ import {
   type ProviderInstanceId,
 } from "@t3tools/contracts";
 import { codexCallbackUrl } from "@t3tools/shared/codexAuthHandoff";
-import { hashTelemetryId } from "@t3tools/shared/telemetryId";
 import * as Clock from "effect/Clock";
 import * as Cause from "effect/Cause";
-import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
-import { openAiUserId } from "../telemetry/Identify.ts";
 import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Signature from "effect/crypto/Signature";
@@ -33,6 +30,7 @@ import * as ProviderCredentialStore from "./ProviderCredentialStore.ts";
 import { withChatGptSessionLock } from "./CodexChatGptSessionLock.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 
 const isSetupError = Schema.is(ProviderSetupError);
@@ -286,18 +284,6 @@ export const makeCodexChatGptAuth = Effect.fn("makeCodexChatGptAuth")(function* 
         saved.sessions.find((session) => session.clientId === saved.activeClientId),
       ),
     ),
-    // The OpenAI account is the person, so it marks who owns this install.
-    Effect.tap((credentials) => {
-      const userId = Option.flatMap(credentials, (saved) =>
-        Option.flatMap(Option.fromUndefinedOr(saved.idToken), openAiUserId),
-      );
-      return Option.isSome(userId) && Option.isSome(analytics)
-        ? analytics.value.recordOwners(
-            [{ source: "openai", ownerId: hashTelemetryId(userId.value) }],
-            "server",
-          )
-        : Effect.void;
-    }),
   );
   const writeSessions = (saved: typeof Sessions.Type) =>
     encodeSessions(saved).pipe(

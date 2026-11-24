@@ -130,3 +130,38 @@ diff --git a/ios/ClerkNativeViewHost.swift b/ios/ClerkNativeViewHost.swift
 +  }
 +  return nil
 +}
+diff --git a/android/src/main/java/expo/modules/clerk/ClerkExpoModule.kt b/android/src/main/java/expo/modules/clerk/ClerkExpoModule.kt
+index 4e19c06daaffd184cc2c14617c722e9c9701c6c3..34aeeb2cea06c23deca231d8c3f361dd6b4e5dc2 100644
+--- a/android/src/main/java/expo/modules/clerk/ClerkExpoModule.kt
++++ b/android/src/main/java/expo/modules/clerk/ClerkExpoModule.kt
+@@ -115,7 +115,8 @@ class ClerkExpoModule : Module() {
+         }
+
+         // JS owns client state. The native foreground refresh races SSO completion and mints duplicate clients (#9217).
+-        val options = ClerkConfigurationOptions(proxyUrl = proxyUrl).withForegroundRefreshDisabled()
++        val options = ClerkConfigurationOptions(proxyUrl = proxyUrl, telemetryEnabled = false)
++            .withForegroundRefreshDisabled()
+         return (if (updateRequiredViewEnabled) options else options.withUpdateRequiredViewDisabled())
+             .withCustomHeaders(customHeaders)
+     }
+diff --git a/ios/ClerkNativeBridge.swift b/ios/ClerkNativeBridge.swift
+index 226f3f78fd97a37ae58d9736312bae9d509985a7..f123a296d63ae67614fcf2bfa1098f2eaf9c5cb7 100644
+--- a/ios/ClerkNativeBridge.swift
++++ b/ios/ClerkNativeBridge.swift
+@@ -673,9 +673,15 @@ final class ClerkNativeBridge {
+   private static func makeClerkOptions(proxyUrl: String?) -> Clerk.Options {
+     let middleware = Clerk.Options.MiddlewareConfig(request: [ClerkExpoHeaderMiddleware()])
+     guard let service = keychainService else {
+-      return .init(proxyUrl: proxyUrl, middleware: middleware, updateRequiredViewEnabled: updateRequiredViewEnabled)
++      return .init(
++        telemetryEnabled: false,
++        proxyUrl: proxyUrl,
++        middleware: middleware,
++        updateRequiredViewEnabled: updateRequiredViewEnabled
++      )
+     }
+     return .init(
++      telemetryEnabled: false,
+       keychainConfig: .init(service: service),
+       proxyUrl: proxyUrl,
+       middleware: middleware,

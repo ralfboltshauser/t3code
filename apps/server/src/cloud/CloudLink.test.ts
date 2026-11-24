@@ -48,6 +48,7 @@ const withService = <A, E>(
     readonly failActivityWrite?: boolean;
     readonly relayFails?: boolean;
     readonly failActivityRead?: boolean;
+    readonly disableOutboundTelemetry?: true;
     readonly failHoldRead?: boolean;
     readonly holdFirstRelayCall?: {
       readonly started: () => void;
@@ -136,7 +137,11 @@ const withService = <A, E>(
       Layer.mock(HttpServer.HttpServer)({
         address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 3773),
       }),
-      Layer.mock(ServerConfig.ServerConfig)({} as ServerConfig.ServerConfig["Service"]),
+      Layer.mock(ServerConfig.ServerConfig)(
+        (options.disableOutboundTelemetry === true
+          ? { disableOutboundTelemetry: true }
+          : {}) as ServerConfig.ServerConfig["Service"],
+      ),
       Layer.succeed(
         HttpClient.HttpClient,
         HttpClient.make(() => Effect.die("unused")),
@@ -232,6 +237,16 @@ it.effect("keeps both settings unchanged when the relay refuses the hold change"
         new TextDecoder().decode(stored.get(HOLD_WEBHOOKS_WHILE_OFFLINE_SECRET)),
         "false",
       );
+    }),
+  ),
+);
+
+it.effect("personal servers keep publishing off even when a client requests it", () =>
+  withService({ disableOutboundTelemetry: true }, ({ preferences, stored }) =>
+    Effect.gen(function* () {
+      const state = yield* preferences.update({ publishAgentActivity: true });
+      assert.isFalse(state.publishAgentActivity);
+      assert.equal(new TextDecoder().decode(stored.get(PUBLISH_AGENT_ACTIVITY_SECRET)), "false");
     }),
   ),
 );

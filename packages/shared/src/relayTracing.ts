@@ -147,13 +147,15 @@ function gatedTracer(delegate: Tracer.Tracer, isEnabled: () => boolean): Tracer.
   });
 }
 
+export const layerDisabled = Layer.succeed(RelayClientTracer, Option.none());
+
 export function layer(
   config: RelayClientTracingConfig | null,
   resource: RelayClientTracingResource,
   options?: { readonly isEnabled?: () => boolean },
 ): Layer.Layer<never, never, HttpClient.HttpClient> {
   if (config === null) {
-    return Layer.succeed(RelayClientTracer, Option.none());
+    return layerDisabled;
   }
 
   const layerTracer = OtlpTracer.layer({
