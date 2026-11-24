@@ -378,7 +378,7 @@ const cancelBackgroundOnlyTask = (
           (event) =>
             event.type === "run.updated" &&
             event.payload.id === child.turn.runId &&
-            event.payload.status === "completed",
+            event.payload.status === (cancelAt === "turn" ? "interrupted" : "completed"),
         );
         const nativeSubagentEvents = [
           {
@@ -653,10 +653,10 @@ const cancelBackgroundOnlyTask = (
         // Stop reached the provider turn that owns the shell.
         if (background === "command") assert.deepEqual(interrupted, [["bg-sleep"]]);
         assert.equal(childAfter.runs.length, cancelAt === "monitor" || cancelAt === "turn" ? 2 : 1);
-        // A Stop accepted before the run's checkpoint settled it ends that run as interrupted.
+        // Stop interrupts a running child without rewriting a run that already ended.
         assert.equal(
           childAfter.runs.find((run) => run.id === child.turn.runId)?.status,
-          cancelAt === "checkpoint" || cancelAt === "turn" ? "interrupted" : "completed",
+          cancelAt === "turn" ? "interrupted" : "completed",
         );
         assert.deepEqual(
           childAfter.runtimeRequests.map((request) => [request.id, request.status]),
