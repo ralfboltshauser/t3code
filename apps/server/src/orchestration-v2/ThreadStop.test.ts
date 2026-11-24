@@ -20,6 +20,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
@@ -2213,7 +2214,8 @@ it.effect.each([
             };
           }),
       });
-      // The settlement promotes the follow-up; optionally its turn starts before Force stop releases.
+      // Wait for promotion separately from the effect that starts the provider turn.
+      const promoted = yield* Deferred.make<void>();
       const layerSessionsStartingFollowUpFirst = Layer.effect(
         ProviderSessionManager.ProviderSessionManagerV2,
         Effect.gen(function* () {
@@ -2222,9 +2224,10 @@ it.effect.each([
           return ProviderSessionManager.ProviderSessionManagerV2.of({
             ...sessions,
             releaseUnlessBusy: (input) =>
-              (startedBeforeRelease ? worker.drain().pipe(Effect.orDie) : Effect.void).pipe(
-                Effect.andThen(sessions.releaseUnlessBusy(input)),
-              ),
+              (startedBeforeRelease
+                ? worker.drain().pipe(Effect.orDie)
+                : Deferred.await(promoted)
+              ).pipe(Effect.andThen(sessions.releaseUnlessBusy(input))),
           });
         }),
       );
@@ -2298,6 +2301,21 @@ it.effect.each([
           creationSource: "web",
         });
 
+        if (!startedBeforeRelease) {
+          yield* orchestrator.streamDomainEvents.pipe(
+            Stream.filter(
+              (event) =>
+                event.type === "run.updated" &&
+                event.threadId === threadId &&
+                event.payload.ordinal === 2 &&
+                event.payload.status === "starting",
+            ),
+            Stream.take(1),
+            Stream.runDrain,
+            Effect.andThen(Deferred.succeed(promoted, undefined)),
+            Effect.forkScoped,
+          );
+        }
         const result = yield* threads.forceStopThread({ threadId });
         yield* worker.drain();
 
