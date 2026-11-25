@@ -220,6 +220,7 @@ const withRepository = <A, E>(
         NodeFS.writeFileSync(NodePath.join(cwd, path), contents);
       });
     yield* git("init", "--initial-branch=main");
+    yield* git("config", "--local", "commit.gpgsign", "false");
     yield* git("config", "user.email", "test@example.com");
     yield* git("config", "user.name", "Test User");
     yield* write("README.md", "hello\n");
